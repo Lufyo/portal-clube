@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+@theme {
+  /* Fonte única do projeto: Archivo, com eixos de largura e peso */
+  --font-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
+
+  /* Paleta rubro-negra */
+  --color-preto: #000000;
+  --color-rubro: #d6101f; /* preenchimentos; texto branco por cima (contraste 5,3:1) */
+  --color-rubro-escuro: #a80c18; /* texto vermelho sobre fundo claro e hover */
+  --color-concreto: #e9e9e6; /* fundo das seções claras */
+  --color-grafite: #3b3b3b; /* texto secundário */
+
+  /* Nomes antigos, mantidos só durante a transição.
+     Serão removidos quando todos os componentes estiverem migrados. */
+  --color-clube: #d6101f;
+  --color-clube-escuro: #000000;
+}
+
+@layer base {
+  body {
+    background-color: #fff;
+    color: var(--color-preto);
+    font-size: 1.0625rem; /* 17px */
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Foco visível para quem navega por teclado (RNF01) */
+  :focus-visible {
+    outline: 3px solid var(--color-rubro);
+    outline-offset: 3px;
+  }
+
+  /* Sobre fundos escuros, o contorno de foco precisa ser claro */
+  .fundo-escuro :focus-visible {
+    outline-color: #fff;
+  }
+
+  ::selection {
+    background: var(--color-rubro);
+    color: #fff;
+  }
+
+  /* Respeita quem pediu menos movimento no sistema */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+    /* A página vira uma coluna que ocupa pelo menos a tela inteira;
+     o conteúdo (main) cresce e empurra o rodapé para baixo */
+  #root {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh; /* no celular, desconta a barra do navegador */
+  }
+
+  #root > main {
+    flex: 1 0 auto;
+  }
+}
+
+/* Título de letreiro: Archivo condensada, peso alto, caixa-alta */
+@utility titulo-display {
+  font-stretch: 68%;
+  font-weight: 850;
+  text-transform: uppercase;
+  line-height: 0.92;
+  letter-spacing: -0.005em;
+}
+
+/* Números de placar, datas e preços: condensados e alinhados em colunas */
+@utility numero-placar {
+  font-stretch: 70%;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Faixas horizontais rubro-negras, como a camisa */
+@utility faixas {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--color-rubro) 0 28px,
+    var(--color-preto) 28px 56px
+  );
+}
+
+/* Faz o navegador imprimir as cores de fundo (usado na carteira) */
+.imprimir-cores {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
