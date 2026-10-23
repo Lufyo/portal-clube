@@ -4,12 +4,22 @@
   /* Fonte única do projeto: Archivo, com eixos de largura e peso */
   --font-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
 
-  /* Paleta rubro-negra */
-  --color-preto: #000000;
-  --color-rubro: #d6101f; /* preenchimentos; texto branco por cima (contraste 5,3:1) */
-  --color-rubro-escuro: #a80c18; /* texto vermelho sobre fundo claro e hover */
-  --color-concreto: #e9e9e6; /* fundo das seções claras */
-  --color-grafite: #3b3b3b; /* texto secundário */
+  /* Superfícies */
+  --color-preto: #000000; /* fundo principal, cabeçalho e rodapé */
+  --color-carvao: #14100f; /* painéis, cartões e campos de formulário */
+  --color-vinho: #6e0a12; /* fundo das seções alternadas */
+
+  /* Cor do clube */
+  --color-rubro: #d6101f; /* faixas, barras e preenchimentos */
+  --color-rubro-escuro: #a80c18; /* hover de elementos vermelhos */
+
+  /* Detalhes e ações */
+  --color-amarelo: #ffc62b; /* botões, foco, links e destaques */
+  --color-amarelo-escuro: #e0a800; /* hover dos botões amarelos */
+
+  /* Texto: marfim no lugar do branco */
+  --color-marfim: #f4e9d0; /* texto principal */
+  --color-marfim-apagado: #c9bc9c; /* texto secundário */
 
   /* Nomes antigos, mantidos só durante a transição.
      Serão removidos quando todos os componentes estiverem migrados. */
@@ -18,28 +28,42 @@
 }
 
 @layer base {
+  /* Faz campos de data e barras de rolagem nativos usarem o modo escuro */
+  html {
+    color-scheme: dark;
+  }
+
   body {
-    background-color: #fff;
-    color: var(--color-preto);
+    background-color: var(--color-preto);
+    color: var(--color-marfim);
     font-size: 1.0625rem; /* 17px */
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
   }
 
-  /* Foco visível para quem navega por teclado (RNF01) */
+  /* A página vira uma coluna que ocupa pelo menos a tela inteira;
+     o conteúdo (main) cresce e empurra o rodapé para baixo */
+  #root {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh; /* no celular, desconta a barra do navegador */
+  }
+
+  #root > main {
+    flex: 1 0 auto;
+  }
+
+  /* Foco visível para quem navega por teclado (RNF01).
+     Amarelo tem contraste alto sobre preto, vinho e vermelho. */
   :focus-visible {
-    outline: 3px solid var(--color-rubro);
+    outline: 3px solid var(--color-amarelo);
     outline-offset: 3px;
   }
 
-  /* Sobre fundos escuros, o contorno de foco precisa ser claro */
-  .fundo-escuro :focus-visible {
-    outline-color: #fff;
-  }
-
   ::selection {
-    background: var(--color-rubro);
-    color: #fff;
+    background: var(--color-amarelo);
+    color: var(--color-preto);
   }
 
   /* Respeita quem pediu menos movimento no sistema */
@@ -52,19 +76,6 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
-  }
-
-    /* A página vira uma coluna que ocupa pelo menos a tela inteira;
-     o conteúdo (main) cresce e empurra o rodapé para baixo */
-  #root {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-    min-height: 100dvh; /* no celular, desconta a barra do navegador */
-  }
-
-  #root > main {
-    flex: 1 0 auto;
   }
 }
 
@@ -93,8 +104,258 @@
   );
 }
 
+/* Botão principal: amarelo, com sombra dura vermelha, como um bilhete impresso */
+@utility botao-primario {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--botao-py, 0.85rem) var(--botao-px, 1.75rem);
+  background-color: var(--color-amarelo);
+  color: var(--color-preto);
+  font-weight: 800;
+  font-stretch: 90%;
+  line-height: 1.2;
+  border-radius: 2px;
+  box-shadow: 4px 4px 0 var(--sombra-botao, var(--color-rubro));
+  transition: transform 0.12s, box-shadow 0.12s, background-color 0.12s;
+
+  &:hover {
+    background-color: var(--color-amarelo-escuro);
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 var(--sombra-botao, var(--color-rubro));
+  }
+  /* Ao clicar, o botão "afunda" até encostar na sombra */
+  &:active {
+    transform: translate(3px, 3px);
+    box-shadow: 1px 1px 0 var(--sombra-botao, var(--color-rubro));
+  }
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: 4px 4px 0 var(--sombra-botao, var(--color-rubro));
+  }
+}
+
+/* Botão secundário: só contorno marfim, preenche ao passar o mouse */
+@utility botao-secundario {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--botao-py, 0.85rem) - 2px) calc(var(--botao-px, 1.75rem) - 2px);
+  border: 2px solid var(--color-marfim);
+  color: var(--color-marfim);
+  font-weight: 800;
+  font-stretch: 90%;
+  line-height: 1.2;
+  border-radius: 2px;
+  transition: background-color 0.12s, color 0.12s;
+
+  &:hover {
+    background-color: var(--color-marfim);
+    color: var(--color-preto);
+  }
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+/* As faixas do Hero entram uma única vez, ao abrir a página */
+@keyframes faixas-entrada {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+.faixas-entrada {
+  animation: faixas-entrada 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
 /* Faz o navegador imprimir as cores de fundo (usado na carteira) */
 .imprimir-cores {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
+}
+
+/* ===== MOVIMENTO AO ROLAR A PÁGINA =====
+   Animações guiadas pela rolagem, em CSS puro (sem JavaScript).
+   Só rodam em navegadores com suporte, e nunca para quem pediu
+   "reduzir movimento" no sistema. Sem suporte, a página fica estática. */
+
+/* Estado padrão (sem suporte): a barra de progresso fica escondida */
+.barra-progresso {
+  display: none;
+}
+
+/* Faixa fina com o padrão rubro, preto e amarelo, usada entre as seções */
+.faixa-divisoria {
+  height: 28px;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--color-rubro) 0 48px,
+    var(--color-preto) 48px 72px,
+    var(--color-amarelo) 72px 84px,
+    var(--color-preto) 84px 108px
+  );
+}
+
+/* Quanto o título do Hero sobe: menos no celular, mais no computador */
+.parallax-texto {
+  --desloc-texto: -40px;
+}
+@media (min-width: 768px) {
+  .parallax-texto {
+    --desloc-texto: -90px;
+  }
+}
+
+@keyframes progresso-pagina {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes parallax-faixas {
+  to {
+    transform: translateY(160px); /* desce mais devagar que a rolagem */
+  }
+}
+@keyframes parallax-texto {
+  to {
+    transform: translateY(var(--desloc-texto));
+    opacity: 0.25;
+  }
+}
+@keyframes correr-faixa {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: -432px; /* 4 repetições do padrão */
+  }
+}
+@keyframes revelar-subindo {
+  from {
+    opacity: 0;
+    transform: translateY(48px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Links do menu deslizam até a seção, em vez de pular */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  @supports (animation-timeline: scroll()) {
+    /* 1. Barra de progresso no Header: cresce conforme a página é rolada */
+    .barra-progresso {
+      display: block;
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      height: 3px;
+      background-color: var(--color-amarelo);
+      transform-origin: left;
+      animation: progresso-pagina linear both;
+      animation-timeline: scroll(root block);
+    }
+
+    /* 2. Parallax do Hero: nos primeiros 650px de rolagem */
+    .parallax-faixas {
+      animation: parallax-faixas linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0px 650px;
+    }
+    .parallax-texto {
+      animation: parallax-texto linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0px 650px;
+    }
+
+    /* 3. Faixas divisórias: correm na horizontal enquanto cruzam a tela */
+    .faixa-divisoria {
+      animation: correr-faixa linear both;
+      animation-timeline: view();
+      animation-range: cover;
+    }
+
+    /* 4. Painéis entram subindo. Os deslocamentos de "range" criam
+       o efeito escalonado quando estão lado a lado. */
+    .revelar {
+      animation: revelar-subindo linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 45%;
+    }
+    .revelar:nth-child(2) {
+      animation-range: entry 8% entry 53%;
+    }
+    .revelar:nth-child(3) {
+      animation-range: entry 16% entry 61%;
+    }
+  }
+}
+
+/* ===== TEMPORÁRIO: ponte para o tema antigo =====
+   Remapeia as classes antigas para a paleta rubro-negra enquanto os
+   componentes não são migrados (Temas 3 a 6). Este bloco será apagado. */
+
+/* Campos de formulário */
+input {
+  background-color: var(--color-carvao);
+  color: var(--color-marfim);
+}
+
+/* Superfícies que eram brancas ou cinza-claro */
+.bg-white {
+  background-color: var(--color-carvao);
+}
+.bg-gray-50 {
+  background-color: var(--color-vinho);
+}
+
+/* Textos cinza e bordas */
+.text-gray-700,
+.text-gray-600 {
+  color: var(--color-marfim-apagado);
+}
+.text-gray-300 {
+  color: var(--color-marfim-apagado);
+}
+.border-gray-200,
+.border-gray-300 {
+  border-color: #4a3f3a;
+}
+
+/* Mensagens de erro e de sucesso em versão escura */
+.bg-red-50,
+.bg-red-100 {
+  background-color: #3a0b10;
+}
+.text-red-700,
+.text-red-800 {
+  color: #ff9aa2;
+}
+.bg-green-50,
+.bg-green-100 {
+  background-color: #0f2a17;
+}
+.text-green-800 {
+  color: #9fe3b0;
+}
+.bg-yellow-100 {
+  background-color: #3a2d00;
+}
+.text-yellow-900 {
+  color: var(--color-amarelo);
 }

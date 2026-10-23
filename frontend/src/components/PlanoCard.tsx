@@ -21,7 +21,7 @@ export default function PlanoCard({ plano }: Props) {
 
   return (
     <article
-      className={`flex flex-col rounded-lg bg-white p-6 shadow ${
+      className={`revelar flex flex-col rounded-lg bg-white p-6 shadow ${
         plano.destaque ? "border-2 border-clube" : "border border-gray-200"
       }`}
     >

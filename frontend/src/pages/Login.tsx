@@ -17,10 +17,14 @@ export default function Login() {
   // Mensagem enviada pela tela de cadastro ("Cadastro realizado!")
   const mensagem = (location.state as { mensagem?: string } | null)?.mensagem;
 
- // Se já está logado (inclusive logo após entrar), vai para a área do sócio
-if (usuario) {
-  return <Navigate to="/minha-area" replace />;
-}
+  // Se veio de uma página protegida, volta para ela depois de entrar
+  const destino =
+    (location.state as { de?: string } | null)?.de ?? "/minha-area";
+
+  // Se já está logado (inclusive logo após entrar), segue para o destino
+  if (usuario) {
+    return <Navigate to={destino} replace />;
+  }
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();

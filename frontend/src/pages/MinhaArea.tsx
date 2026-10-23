@@ -85,9 +85,6 @@ export default function MinhaArea() {
           </>
         )}
 
-        <p className="mt-8 text-gray-700">
-          Em breve: mensalidades, ingressos e carteira virtual.
-        </p>
       </main>
       <Footer />
     </>

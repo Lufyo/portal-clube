@@ -6,17 +6,24 @@ import express from "express";
 import { supabase } from "./config/supabase";
 import { authRoutes } from "./routes/auth.routes";
 import { planoRoutes } from "./routes/plano.routes";
+import { ingressoRoutes } from "./routes/ingresso.routes";
 
 export const app = express();
 
 // Libera apenas o frontend local (Vite) para chamar a API
-app.use(cors({ origin: "http://localhost:5173" }));
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+  })
+);
 app.use(express.json());
 app.use("/api/auth", authRoutes); // todas as rotas de auth começam com /api/auth
 app.use("/api", planoRoutes);
 app.use("/api", mensalidadeRoutes); // /api/mensalidades
 app.use("/api", conteudoRoutes); // /api/jogos e /api/noticias
-app.use("/api", adminRoutes); // /api/admin/...
+app.use("/api", adminRoutes);
+app.use("/api", ingressoRoutes); // /api/ingressos
 
 
 // Rota de teste: confirma que a API e o banco estão funcionando

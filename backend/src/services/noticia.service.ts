@@ -23,3 +23,31 @@ export async function listarNoticias() {
     data: noticia.publicada_em,
   }));
 }
+
+export async function buscarNoticiaPublica(id: string) {
+  const { data, error } = await supabase
+    .from("noticias")
+    .select("id, titulo, resumo, conteudo, categoria, tipo, publicada_em")
+    .eq("id", id)
+    .eq("publicada", true) // rascunho = "não encontrada" para o público
+    .maybeSingle();
+
+  // 22P02 = o id não tem formato de UUID; tratamos como "não encontrada"
+  if (error && error.code !== "22P02") {
+    console.error(error);
+    throw new ErroDeNegocio("Não foi possível carregar a notícia", 500);
+  }
+  if (!data) {
+    throw new ErroDeNegocio("Notícia não encontrada", 404);
+  }
+
+  return {
+    id: data.id,
+    titulo: data.titulo,
+    resumo: data.resumo,
+    conteudo: data.conteudo,
+    categoria: data.categoria,
+    tipo: data.tipo,
+    data: data.publicada_em,
+  };
+}

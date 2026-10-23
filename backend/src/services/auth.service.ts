@@ -62,7 +62,12 @@ export async function autenticarSocio(dados: LoginInput) {
 
   return {
     token: data.session.access_token,
-    usuario: { id: data.user.id, nome: perfil.nome, email: data.user.email },
+    usuario: {
+      id: data.user.id,
+      nome: perfil.nome,
+      email: data.user.email,
+      papel: perfil.papel,
+    },
   };
 }
 
@@ -70,7 +75,9 @@ export async function buscarPerfil(id: string) {
   const { data, error } = await supabase
     .from("perfis")
     // plano:planos(...) traz junto os dados do plano ligado a este perfil
-    .select("id, nome, cpf, data_nascimento, numero_socio, papel, plano:planos(id, nome, preco_mensal)")
+    .select(
+      "id, nome, cpf, data_nascimento, numero_socio, papel, plano:planos(id, nome, preco_mensal)"
+    )
     .eq("id", id)
     .single();
 

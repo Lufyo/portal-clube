@@ -21,7 +21,7 @@ export class ApiError extends Error {
 }
 
 type Opcoes = {
-  metodo?: "GET" | "POST";
+  metodo?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   corpo?: unknown;
 };
 
