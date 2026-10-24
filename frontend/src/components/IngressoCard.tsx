@@ -36,10 +36,11 @@ export default function IngressoCard({ ingresso, passado }: Props) {
         passado ? "opacity-60" : ""
       }`}
     >
-      {/* Setor */}
-      <div className="border-l-8 border-rubro bg-vinho p-5 sm:w-44">
+      {/* Setor: a coluna cresce com o nome (ex.: "Arquibancada") até um limite;
+          acima dele, a palavra quebra em vez de invadir a coluna do jogo */}
+      <div className="border-l-8 border-rubro bg-vinho p-5 sm:max-w-64 sm:min-w-44 sm:shrink-0">
         <p className="text-sm text-marfim-apagado">Setor</p>
-        <p className="titulo-display mt-1 text-3xl text-amarelo">
+        <p className="titulo-display mt-1 text-3xl wrap-break-word text-amarelo">
           {ingresso.setor}
         </p>
       </div>

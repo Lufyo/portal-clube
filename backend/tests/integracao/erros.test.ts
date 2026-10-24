@@ -4,6 +4,60 @@ import { banco } from "../apoio/supabaseFalso";
 
 // Respostas de erro como o site e o Swagger as recebem
 
+describe("toda resposta de erro vem em JSON, no formato { erro }", () => {
+  it("JSON malformado responde 400 com mensagem clara", async () => {
+    const resposta = await api()
+      .post("/api/auth/login")
+      .set("Content-Type", "application/json")
+      .send('{"email": "maria@exemplo.com", ');
+
+    expect(resposta.status).toBe(400);
+    expect(resposta.headers["content-type"]).toMatch(/application\/json/);
+    expect(resposta.body).toEqual({ erro: "Os dados enviados não estão em um formato JSON válido" });
+  });
+
+  it("corpo grande demais responde 413 em JSON", async () => {
+    const resposta = await api()
+      .post("/api/auth/login")
+      .set("Content-Type", "application/json")
+      .send(JSON.stringify({ email: "a@b.com", senha: "x".repeat(200_000) }));
+
+    expect(resposta.status).toBe(413);
+    expect(resposta.headers["content-type"]).toMatch(/application\/json/);
+    expect(resposta.body).toEqual({ erro: "Os dados enviados são grandes demais" });
+  });
+
+  it("outro problema ao ler o corpo mantém o código 4xx, em JSON (não vira 500)", async () => {
+    const resposta = await api()
+      .post("/api/auth/login")
+      .set("Content-Type", "application/json; charset=latin9")
+      .send('{"email":"a@b.com","senha":"x"}');
+
+    expect(resposta.status).toBe(415);
+    expect(resposta.body).toEqual({ erro: "Não foi possível ler os dados enviados" });
+  });
+
+  it("rota da API que não existe responde 404 em JSON", async () => {
+    const resposta = await api().get("/api/rota-que-nao-existe");
+
+    expect(resposta.status).toBe(404);
+    expect(resposta.headers["content-type"]).toMatch(/application\/json/);
+    expect(resposta.body).toEqual({ erro: "Rota não encontrada" });
+  });
+
+  it("método que a rota não aceita também responde 404 em JSON", async () => {
+    const resposta = await api().put("/api/planos");
+
+    expect(resposta.status).toBe(404);
+    expect(resposta.body).toEqual({ erro: "Rota não encontrada" });
+  });
+
+  it("a documentação continua no ar", async () => {
+    expect((await api().get("/api/docs/")).status).toBe(200);
+    expect((await api().get("/api/openapi.json")).status).toBe(200);
+  });
+});
+
 describe("requisição sem os dados", () => {
   it("login sem corpo diz o que falta, em português", async () => {
     const resposta = await api().post("/api/auth/login");
