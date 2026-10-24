@@ -71,6 +71,18 @@ export async function autenticarSocio(dados: LoginInput) {
   };
 }
 
+// Sem os tipos gerados do banco, o supabase-js trata "plano:planos(...)" como
+// lista. Cada perfil aponta para um plano só, então ele chega como objeto (ou null).
+type PerfilComPlano = {
+  id: string;
+  nome: string;
+  cpf: string;
+  data_nascimento: string;
+  numero_socio: number;
+  papel: string;
+  plano: { id: string; nome: string; preco_mensal: number } | null;
+};
+
 export async function buscarPerfil(id: string) {
   const { data, error } = await supabase
     .from("perfis")
@@ -84,5 +96,5 @@ export async function buscarPerfil(id: string) {
   if (error || !data) {
     throw new ErroDeNegocio("Perfil não encontrado", 404);
   }
-  return data;
+  return data as unknown as PerfilComPlano;
 }

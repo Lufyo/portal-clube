@@ -11,13 +11,28 @@ function hojeNoBrasil() {
   });
 }
 
+// Sem os tipos gerados do banco, o supabase-js trata "plano:planos(...)" como
+// lista. Perfil e mensalidade apontam para um plano só: chega objeto (ou null).
+type PlanoDoPerfil = { plano: { id: string; preco_mensal: number } | null };
+
+type LinhaMensalidade = {
+  id: string;
+  referencia: string;
+  valor: number;
+  vencimento: string;
+  status: "pendente" | "paga";
+  pago_em: string | null;
+  plano: { nome: string } | null;
+};
+
 export async function listarMensalidades(usuarioId: string) {
   // 1. Descobre o plano atual do sócio
-  const { data: perfil } = await supabase
+  const { data: dadosPerfil } = await supabase
     .from("perfis")
     .select("plano:planos(id, preco_mensal)")
     .eq("id", usuarioId)
     .single();
+  const perfil = dadosPerfil as unknown as PlanoDoPerfil | null;
 
   if (!perfil) {
     throw new ErroDeNegocio("Perfil não encontrado", 404);
@@ -58,7 +73,7 @@ export async function listarMensalidades(usuarioId: string) {
   }
 
   // Formato da API (camelCase)
-  return data.map((m) => ({
+  return (data as unknown as LinhaMensalidade[]).map((m) => ({
     id: m.id,
     referencia: m.referencia,
     plano: m.plano?.nome ?? null,
