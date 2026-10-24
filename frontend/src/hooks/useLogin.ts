@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "./useAuth";
 import { ApiError } from "../services/api";
 
 export function useLogin() {
