@@ -59,6 +59,10 @@ cp .env.example .env
 
 ```bash
 npm run dev      # tsx watch: reinicia a cada alteração
+
+# produção
+npm run build    # compila para dist/
+npm start        # roda dist/server.js (também lê o .env)
 ```
 
 Confira em <http://localhost:3333/api/health>: a resposta deve ser `{ "status": "ok", "banco": "conectado" }`.
@@ -74,6 +78,7 @@ cd frontend
 npm install
 npm run dev      # abre em http://localhost:5173
 npm run lint     # confere o código
+npm run build    # confere os tipos e gera o site em dist/
 ```
 
 O site chama `http://localhost:3333/api` por padrão. Para outro endereço, copie `frontend/.env.example` para `frontend/.env` e ajuste o `VITE_API_URL`. Tudo que começa com `VITE_` vai para o navegador: nunca coloque chaves secretas no `.env` do frontend.
@@ -179,7 +184,6 @@ A compra de ingressos é feita pela função `comprar_ingressos(p_usuario, p_jog
 
 ## Problemas conhecidos
 
-- **Build de produção quebrado:** `backend/tsconfig.json` inclui arquivos de `frontend/src` e `frontend/tsconfig.app.json` inclui `backend/src/utils`, então `npm run build` falha nas duas pastas. Em desenvolvimento (`npm run dev`) tudo funciona.
 - **CORS** aceita só `http://localhost:5173` (`backend/src/app.ts`); para publicar, o endereço do site precisa vir de configuração.
 - Não há testes automatizados.
 
