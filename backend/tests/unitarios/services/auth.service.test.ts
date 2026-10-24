@@ -86,7 +86,16 @@ describe("autenticarSocio", () => {
 
 describe("buscarPerfil", () => {
   it("responde 404 quando o perfil não existe", async () => {
-    banco.responder("perfis", { data: null, error: { code: "PGRST116" } });
+    banco.responder("perfis", { data: null });
     await expect(buscarPerfil("u1")).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("falha do banco é erro do servidor, não 'perfil não encontrado'", async () => {
+    banco.responder("perfis", { data: null, error: { message: "timeout" } });
+
+    await expect(buscarPerfil("u1")).rejects.toMatchObject({
+      status: 500,
+      message: "Não foi possível carregar o perfil",
+    });
   });
 });

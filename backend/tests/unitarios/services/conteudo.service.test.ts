@@ -31,6 +31,21 @@ describe("plano.service", () => {
     await expect(contratarPlano("u1", "p9")).rejects.toMatchObject({ status: 404, campo: "planoId" });
   });
 
+  it("trata id de plano fora do formato UUID como plano não encontrado", async () => {
+    banco.responder("planos", { data: null, error: { code: "22P02" } });
+    await expect(contratarPlano("u1", "abc")).rejects.toMatchObject({ status: 404, campo: "planoId" });
+  });
+
+  it("falha do banco ao buscar o plano é erro do servidor, não 'plano não encontrado'", async () => {
+    banco.responder("planos", { data: null, error: { message: "timeout" } });
+
+    await expect(contratarPlano("u1", "p2")).rejects.toMatchObject({
+      status: 500,
+      message: "Não foi possível contratar o plano",
+    });
+    expect(banco.consultasA("perfis")).toHaveLength(0);
+  });
+
   it("contratar grava o plano no perfil e apaga as cobranças pendentes do plano antigo", async () => {
     banco.responder("planos", { data: { id: "p2", nome: "Leão Ouro" } });
     banco.responder("perfis", {});

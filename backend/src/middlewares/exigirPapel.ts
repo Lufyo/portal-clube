@@ -11,9 +11,16 @@ export function exigirPapel(...permitidos: Papel[]) {
       .from("perfis")
       .select("papel")
       .eq("id", res.locals.usuarioId) // definido pelo exigirLogin
-      .single();
+      .maybeSingle(); // perfil inexistente chega como null, não como erro
 
-    if (error || !data) {
+    // Falha do banco: responde 500 em vez de "acesso negado", que faria quem
+    // tem permissão achar que não tem. Nos dois casos a rota não é executada.
+    if (error) {
+      console.error(error);
+      res.status(500).json({ erro: "Não foi possível verificar suas permissões" });
+      return;
+    }
+    if (!data) {
       res.status(403).json({ erro: "Acesso negado" });
       return;
     }

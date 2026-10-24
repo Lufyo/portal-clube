@@ -52,6 +52,15 @@ function criarBancoFalso() {
               error: resposta.error ?? null,
               count: resposta.count ?? null,
             };
+            // Igual ao Supabase: .single() sem nenhuma linha é ERRO (PGRST116);
+            // só o .maybeSingle() devolve null
+            const usouSingle = consulta.operacoes.some((o) => o.metodo === "single");
+            if (usouSingle && resultado.data === null && resultado.error === null) {
+              resultado.error = {
+                code: "PGRST116",
+                message: "JSON object requested, multiple (or no) rows returned",
+              };
+            }
             return (resolver: (valor: unknown) => unknown, rejeitar?: (motivo: unknown) => unknown) =>
               Promise.resolve(resultado).then(resolver, rejeitar);
           }

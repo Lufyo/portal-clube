@@ -79,4 +79,17 @@ describe("exigirPapel", () => {
     const { res } = await rodar(null, "editor");
     expect(res.statusCode).toBe(403);
   });
+
+  it("falha do banco responde 500, não 'acesso negado', e não deixa passar", async () => {
+    banco.responder("perfis", { data: null, error: { message: "timeout" } });
+    const res = criarRes();
+    res.locals.usuarioId = "u1";
+    const next = criarNext();
+
+    await exigirPapel("editor")(criarReq(), res, next);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.corpo).toEqual({ erro: "Não foi possível verificar suas permissões", campos: undefined });
+    expect(next).not.toHaveBeenCalled();
+  });
 });

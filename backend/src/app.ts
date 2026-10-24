@@ -20,6 +20,12 @@ app.use(
   })
 );
 app.use(express.json());
+// Sem corpo, o Express deixa req.body undefined: vira {} para a validação
+// dizer o que falta em cada campo
+app.use((req, _res, next) => {
+  req.body ??= {};
+  next();
+});
 app.use("/api/auth", authRoutes); // todas as rotas de auth começam com /api/auth
 app.use("/api", planoRoutes);
 app.use("/api", mensalidadeRoutes); // /api/mensalidades
