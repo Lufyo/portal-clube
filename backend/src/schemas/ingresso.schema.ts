@@ -1,8 +1,8 @@
-import { z } from "zod";
+import { z } from "./zod";
 
 export const compraSchema = z.object({
-  jogoId: z.string().min(1, "Escolha um jogo"),
-  setorId: z.string().min(1, "Escolha um setor"),
+  jogoId: z.string({ message: "Escolha um jogo" }).min(1, "Escolha um jogo"),
+  setorId: z.string({ message: "Escolha um setor" }).min(1, "Escolha um setor"),
   quantidade: z
     .number({ message: "Informe a quantidade" })
     .int("Informe um número inteiro")

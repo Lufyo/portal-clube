@@ -27,13 +27,19 @@ type LinhaMensalidade = {
 
 export async function listarMensalidades(usuarioId: string) {
   // 1. Descobre o plano atual do sócio
-  const { data: dadosPerfil } = await supabase
+  // maybeSingle: perfil inexistente chega como null (e não como erro), então
+  // "error" aqui é sempre falha do banco
+  const { data: dadosPerfil, error: erroPerfil } = await supabase
     .from("perfis")
     .select("plano:planos(id, preco_mensal)")
     .eq("id", usuarioId)
-    .single();
+    .maybeSingle();
   const perfil = dadosPerfil as unknown as PlanoDoPerfil | null;
 
+  if (erroPerfil) {
+    console.error(erroPerfil);
+    throw new ErroDeNegocio("Não foi possível carregar as mensalidades", 500);
+  }
   if (!perfil) {
     throw new ErroDeNegocio("Perfil não encontrado", 404);
   }
@@ -86,13 +92,19 @@ export async function listarMensalidades(usuarioId: string) {
 
 export async function pagarMensalidade(usuarioId: string, id: string) {
   // O filtro por usuario_id garante que o sócio só paga as próprias mensalidades
-  const { data: mensalidade } = await supabase
+  const { data: mensalidade, error: erroBusca } = await supabase
     .from("mensalidades")
     .select("id, status")
     .eq("id", id)
     .eq("usuario_id", usuarioId)
     .maybeSingle();
 
+  // Falha do banco não pode virar "mensalidade não encontrada".
+  // 22P02 = o id não tem formato de UUID; tratamos como "não encontrada".
+  if (erroBusca && erroBusca.code !== "22P02") {
+    console.error(erroBusca);
+    throw new ErroDeNegocio("Não foi possível registrar o pagamento", 500);
+  }
   if (!mensalidade) {
     throw new ErroDeNegocio("Mensalidade não encontrada", 404);
   }

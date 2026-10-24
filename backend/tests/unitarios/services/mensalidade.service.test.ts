@@ -71,6 +71,15 @@ describe("listarMensalidades", () => {
     banco.responder("perfis", { data: null });
     await expect(listarMensalidades("u1")).rejects.toMatchObject({ status: 404 });
   });
+
+  it("falha do banco ao buscar o perfil é erro do servidor, não 'perfil não encontrado'", async () => {
+    banco.responder("perfis", { data: null, error: { message: "timeout" } });
+
+    await expect(listarMensalidades("u1")).rejects.toMatchObject({
+      status: 500,
+      message: "Não foi possível carregar as mensalidades",
+    });
+  });
 });
 
 describe("pagarMensalidade", () => {
@@ -82,6 +91,21 @@ describe("pagarMensalidade", () => {
       message: "Mensalidade não encontrada",
     });
     expect(filtrosEq(banco.consultasA("mensalidades")[0])).toEqual({ id: "m-de-outro", usuario_id: "u1" });
+  });
+
+  it("trata id fora do formato UUID como mensalidade não encontrada", async () => {
+    banco.responder("mensalidades", { data: null, error: { code: "22P02" } });
+    await expect(pagarMensalidade("u1", "abc")).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("falha do banco ao buscar a mensalidade é erro do servidor, não 'não encontrada'", async () => {
+    banco.responder("mensalidades", { data: null, error: { message: "timeout" } });
+
+    await expect(pagarMensalidade("u1", "m1")).rejects.toMatchObject({
+      status: 500,
+      message: "Não foi possível registrar o pagamento",
+    });
+    expect(banco.consultasA("mensalidades")).toHaveLength(1);
   });
 
   it("não paga duas vezes", async () => {

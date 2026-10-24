@@ -31,10 +31,17 @@ describe("registerSchema (cadastro)", () => {
     expect(resultado.email).toBe("maria@exemplo.com");
   });
 
+  it("aceita CPF só com números e ignora espaços nas pontas", () => {
+    expect(registerSchema.parse({ ...cadastroValido, cpf: " 52998224725 " }).cpf).toBe("52998224725");
+  });
+
   it.each([
     ["dígito verificador errado", "529.982.247-26"],
     ["todos os dígitos iguais", "111.111.111-11"],
     ["tamanho errado", "529.982.247"],
+    ["letras no meio", "529.982.247-25abc"],
+    ["letras misturadas aos números", "5a2b9c98224725"],
+    ["outros símbolos", "529/982/247-25"],
   ])("recusa CPF com %s", (_caso, cpf) => {
     expect(errosDe(registerSchema, { ...cadastroValido, cpf })).toEqual({ cpf: "CPF inválido" });
   });
@@ -117,6 +124,65 @@ describe("noticiaSchema", () => {
     expect(errosDe(noticiaSchema, { ...noticia, titulo: "a".repeat(141) })).toEqual({
       titulo: "O título pode ter no máximo 140 caracteres",
     });
+  });
+});
+
+// RNF06: mensagens claras, em português, também quando o campo nem foi enviado
+describe("campos ausentes", () => {
+  it.each([
+    [
+      "cadastro",
+      registerSchema,
+      {
+        nome: "Informe seu nome completo",
+        email: "Informe seu e-mail",
+        cpf: "Informe seu CPF",
+        dataNascimento: "Informe sua data de nascimento",
+        senha: "Crie uma senha",
+      },
+    ],
+    ["login", loginSchema, { email: "Informe seu e-mail", senha: "Informe a senha" }],
+    [
+      "compra de ingressos",
+      compraSchema,
+      { jogoId: "Escolha um jogo", setorId: "Escolha um setor", quantidade: "Informe a quantidade" },
+    ],
+    ["assinatura", contratarSchema, { planoId: "Escolha um plano" }],
+    [
+      "notícia",
+      noticiaSchema,
+      {
+        titulo: "Informe o título",
+        resumo: "Informe o resumo",
+        conteudo: "Informe o texto da notícia",
+        categoria: "Escolha uma categoria",
+        tipo: "Escolha um tipo",
+      },
+    ],
+    ["publicação", publicacaoSchema, { publicada: "Informe se a notícia deve ser publicada" }],
+  ] as const)("%s: cada campo ausente tem sua mensagem", (_formulario, schema, mensagens) => {
+    expect(errosDe(schema, {})).toEqual(mensagens);
+  });
+
+  it("tipo errado num campo também recebe a mensagem do campo", () => {
+    expect(errosDe(loginSchema, { email: 123, senha: true })).toEqual({
+      email: "Informe seu e-mail",
+      senha: "Informe a senha",
+    });
+  });
+
+  it("nenhuma mensagem de validação sai em inglês", () => {
+    const entradas = [undefined, null, [], "texto", {}, { email: 1, senha: [] }, { quantidade: "2" }];
+    const schemas = [registerSchema, loginSchema, compraSchema, contratarSchema, noticiaSchema, publicacaoSchema];
+
+    for (const schema of schemas) {
+      for (const entrada of entradas) {
+        const resultado = schema.safeParse(entrada);
+        for (const problema of resultado.error?.issues ?? []) {
+          expect(problema.message).not.toMatch(/Invalid|expected|received|Required/);
+        }
+      }
+    }
   });
 });
 

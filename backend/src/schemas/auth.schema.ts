@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "./zod";
 
 // Confere os dígitos verificadores do CPF
 function cpfValido(cpf: string): boolean {
@@ -20,20 +20,23 @@ function cpfValido(cpf: string): boolean {
 }
 
 export const registerSchema = z.object({
-  nome: z.string().trim().min(3, "Informe seu nome completo"),
-  email: z.string().trim().toLowerCase().email("E-mail inválido"),
-  // Aceita "529.982.247-25" ou "52998224725": guardamos só os números
+  nome: z.string({ message: "Informe seu nome completo" }).trim().min(3, "Informe seu nome completo"),
+  email: z.string({ message: "Informe seu e-mail" }).trim().toLowerCase().email("E-mail inválido"),
+  // Aceita "529.982.247-25" ou "52998224725" (letras e outros símbolos, não):
+  // guardamos só os números
   cpf: z
-    .string()
+    .string({ message: "Informe seu CPF" })
+    .trim()
+    .regex(/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/, "CPF inválido")
     .transform((valor) => valor.replace(/\D/g, ""))
     .refine(cpfValido, "CPF inválido"),
   dataNascimento: z
-    .string()
+    .string({ message: "Informe sua data de nascimento" })
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD")
     .refine((data) => new Date(data) < new Date(), "Data de nascimento inválida"),
   // Regra do RNF04: mínimo 8 caracteres, com letras e números
   senha: z
-    .string()
+    .string({ message: "Crie uma senha" })
     .min(8, "A senha deve ter no mínimo 8 caracteres")
     .regex(/[A-Za-z]/, "A senha deve conter letras")
     .regex(/\d/, "A senha deve conter números"),
@@ -43,8 +46,8 @@ export const registerSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 export const loginSchema = z.object({
-  email: z.string().trim().toLowerCase().email("E-mail inválido"),
-  senha: z.string().min(1, "Informe a senha"),
+  email: z.string({ message: "Informe seu e-mail" }).trim().toLowerCase().email("E-mail inválido"),
+  senha: z.string({ message: "Informe a senha" }).min(1, "Informe a senha"),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;

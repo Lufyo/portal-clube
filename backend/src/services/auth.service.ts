@@ -91,9 +91,14 @@ export async function buscarPerfil(id: string) {
       "id, nome, cpf, data_nascimento, numero_socio, papel, plano:planos(id, nome, preco_mensal)"
     )
     .eq("id", id)
-    .single();
+    // maybeSingle: perfil inexistente chega como null; "error" é falha do banco
+    .maybeSingle();
 
-  if (error || !data) {
+  if (error) {
+    console.error(error);
+    throw new ErroDeNegocio("Não foi possível carregar o perfil", 500);
+  }
+  if (!data) {
     throw new ErroDeNegocio("Perfil não encontrado", 404);
   }
   return data as unknown as PerfilComPlano;

@@ -18,6 +18,12 @@ describe("formatarErrosZod", () => {
       email: "E-mail inválido",
     });
   });
+
+  it("erro do corpo inteiro (ex.: lista no lugar do objeto) não vira um campo 'undefined'", () => {
+    const resultado = z.object({ email: z.string() }).safeParse([]);
+
+    expect(formatarErrosZod(resultado.error!)).toEqual({});
+  });
 });
 
 describe("responderErro", () => {
