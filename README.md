@@ -31,7 +31,7 @@ O frontend nunca acessa o banco diretamente: tudo passa pela API.
 | Parte | O quê |
 | --- | --- |
 | Frontend | React 19, TypeScript, Vite 8, Tailwind CSS 4, React Router 7, qrcode.react, fonte Archivo (@fontsource), ESLint |
-| Backend | Node.js, TypeScript, Express 5, Zod 4, supabase-js, cors, dotenv, tsx |
+| Backend | Node.js, TypeScript, Express 5, Zod 4, supabase-js, cors, dotenv, tsx, swagger-ui-express (documentação da API) |
 | Banco e login | Supabase (PostgreSQL gerenciado + Supabase Auth) |
 
 ## Como rodar
@@ -63,6 +63,8 @@ npm run dev      # tsx watch: reinicia a cada alteração
 
 Confira em <http://localhost:3333/api/health>: a resposta deve ser `{ "status": "ok", "banco": "conectado" }`.
 
+A documentação interativa da API (Swagger) fica em <http://localhost:3333/api/docs>. Veja [Documentação da API](#documentação-da-api).
+
 ### 2. Site
 
 Em outro terminal:
@@ -87,8 +89,9 @@ portal-clube/
 ├── backend/
 │   └── src/
 │       ├── server.ts      lê o .env e sobe a API
-│       ├── app.ts         CORS, JSON, registro das rotas e /api/health
+│       ├── app.ts         CORS, JSON, registro das rotas, /api/health e /api/docs
 │       ├── config/        supabase.ts: cliente do banco e do Auth
+│       ├── docs/          openapi.ts: documentação da API (OpenAPI 3.1)
 │       ├── routes/        endereços e middlewares de cada rota
 │       ├── middlewares/   exigirLogin (token) e exigirPapel (perfil)
 │       ├── controllers/   recebem a requisição, validam e respondem
@@ -129,6 +132,16 @@ Todas começam com `/api`.
 | `GET /admin/resumo` | Editor, gestor, admin | Indicadores do painel |
 | `/admin/noticias` (listar, buscar, criar, editar, `PATCH /:id/publicacao`, excluir) | Editor, admin | Gestão de notícias |
 | `GET /health` | Público | Confere a API e o banco |
+| `GET /docs` · `GET /openapi.json` | Público | Documentação da API (Swagger e arquivo OpenAPI) |
+
+### Documentação da API
+
+Com a API rodando:
+
+- **<http://localhost:3333/api/docs>** — tela do Swagger com todas as rotas, os campos de cada requisição, as respostas e os erros possíveis. Dá para testar direto por ela: faça `POST /auth/login`, copie o `token`, clique em **Authorize** e cole o token para liberar as rotas com cadeado (o token fica salvo ao recarregar a página).
+- **<http://localhost:3333/api/openapi.json>** — o mesmo conteúdo no formato OpenAPI 3.1, para importar no Postman, no Insomnia ou em geradores de código.
+
+A documentação está em `backend/src/docs/openapi.ts`. O corpo de cada requisição é gerado a partir do schema Zod que o controller usa (`z.toJSONSchema`), então as regras de validação documentadas são sempre as mesmas do código. As respostas são descritas à mão.
 
 ### Contrato
 
@@ -175,5 +188,5 @@ A compra de ingressos é feita pela função `comprar_ingressos(p_usuario, p_jog
 
 - Textos de tela, comentários, nomes de arquivos e de funções em português.
 - Cor, fonte e espaçamento vêm dos tokens do tema em `frontend/src/index.css` (ex.: `bg-rubro`, `text-marfim`), nunca de códigos soltos.
-- Endpoint novo: rota → controller → schema Zod → service, com erros via `ErroDeNegocio`.
+- Endpoint novo: rota → controller → schema Zod → service, com erros via `ErroDeNegocio`, e a rota documentada em `backend/src/docs/openapi.ts`.
 - Nunca suba o `.env` nem a chave `service_role` para o Git.
