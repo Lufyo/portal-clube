@@ -7,7 +7,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useLogin } from "../hooks/useLogin";
 
 export default function Login() {
-  const { usuario } = useAuth();
+  const { usuario, aviso } = useAuth();
   const { login, carregando, erro, errosCampos } = useLogin();
   const location = useLocation();
 
@@ -15,7 +15,8 @@ export default function Login() {
   const [senha, setSenha] = useState("");
 
   // Mensagem enviada pela tela de cadastro ("Cadastro realizado!")
-  const mensagem = (location.state as { mensagem?: string } | null)?.mensagem;
+  // ou o aviso de quando a sessão foi encerrada (ex.: depois de trocar a senha)
+  const mensagem = (location.state as { mensagem?: string } | null)?.mensagem ?? aviso;
 
   // Se veio de uma página protegida, volta para ela depois de entrar
   const destino =

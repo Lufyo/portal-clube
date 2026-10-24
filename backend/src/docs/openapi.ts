@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { contratarSchema } from "../schemas/assinatura.schema";
-import { loginSchema, registerSchema } from "../schemas/auth.schema";
+import { loginSchema, perfilSchema, registerSchema, trocaDeSenhaSchema } from "../schemas/auth.schema";
 import { compraSchema } from "../schemas/ingresso.schema";
 import { categorias, noticiaSchema, publicacaoSchema, tipos } from "../schemas/noticia.schema";
 
@@ -149,6 +149,69 @@ export const documentoOpenApi = {
           200: json("Perfil do usuário", ref("Perfil")),
           401: r401,
           404: erro("Perfil não encontrado", { erro: "Perfil não encontrado" }),
+          500: r500,
+        },
+      },
+      patch: {
+        tags: ["Autenticação"],
+        summary: "Editar meus dados",
+        operationId: "editarMeusDados",
+        description:
+          "Atualiza nome, e-mail e data de nascimento. O CPF não pode ser alterado (se enviado, é ignorado). Para trocar o e-mail, envie também `senhaAtual`.",
+        security: comLogin,
+        requestBody: corpo(perfilSchema, {
+          nome: "Maria Leão da Silva",
+          email: "maria.nova@exemplo.com",
+          dataNascimento: "1995-04-13",
+          senhaAtual: "leao1905",
+        }),
+        responses: {
+          200: json("Dados atualizados", {
+            type: "object",
+            properties: {
+              mensagem: { type: "string", example: "Dados atualizados com sucesso" },
+              perfil: ref("Perfil"),
+            },
+          }),
+          400: erro("Dados inválidos, ou e-mail trocado sem a senha certa", {
+            erro: "Senha incorreta",
+            campos: { senhaAtual: "Senha incorreta" },
+          }),
+          401: r401,
+          409: erro("E-mail já usado por outra conta", {
+            erro: "E-mail já cadastrado",
+            campos: { email: "E-mail já cadastrado" },
+          }),
+          500: r500,
+        },
+      },
+    },
+    "/auth/senha": {
+      put: {
+        tags: ["Autenticação"],
+        summary: "Trocar minha senha",
+        operationId: "trocarMinhaSenha",
+        description:
+          "Confere a senha atual e grava a nova, que segue a regra do cadastro (mínimo de 8 caracteres, com letras e números) e não pode ser igual à atual. As sessões abertas em outros aparelhos são encerradas.",
+        security: comLogin,
+        requestBody: corpo(trocaDeSenhaSchema, { senhaAtual: "leao1905", novaSenha: "sport1905" }),
+        responses: {
+          200: json("Senha alterada", {
+            type: "object",
+            properties: {
+              mensagem: { type: "string", example: "Senha alterada com sucesso" },
+              token: {
+                type: ["string", "null"],
+                description:
+                  "Token novo. Trocar a senha encerra todas as sessões da conta, inclusive a atual: use este token daqui em diante. Se vier null, é preciso entrar de novo.",
+              },
+            },
+          }),
+          400: erro("Nova senha fraca ou igual à atual, ou senha atual incorreta", {
+            erro: "Senha atual incorreta",
+            campos: { senhaAtual: "Senha atual incorreta" },
+          }),
+          401: r401,
           500: r500,
         },
       },

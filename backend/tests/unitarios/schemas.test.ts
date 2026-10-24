@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { contratarSchema } from "../../src/schemas/assinatura.schema";
-import { loginSchema, registerSchema } from "../../src/schemas/auth.schema";
+import {
+  loginSchema,
+  perfilSchema,
+  registerSchema,
+  trocaDeSenhaSchema,
+} from "../../src/schemas/auth.schema";
 import { compraSchema } from "../../src/schemas/ingresso.schema";
 import { noticiaSchema, publicacaoSchema } from "../../src/schemas/noticia.schema";
 import { formatarErrosZod } from "../../src/utils/respostas";
@@ -173,7 +178,16 @@ describe("campos ausentes", () => {
 
   it("nenhuma mensagem de validação sai em inglês", () => {
     const entradas = [undefined, null, [], "texto", {}, { email: 1, senha: [] }, { quantidade: "2" }];
-    const schemas = [registerSchema, loginSchema, compraSchema, contratarSchema, noticiaSchema, publicacaoSchema];
+    const schemas = [
+      registerSchema,
+      loginSchema,
+      perfilSchema,
+      trocaDeSenhaSchema,
+      compraSchema,
+      contratarSchema,
+      noticiaSchema,
+      publicacaoSchema,
+    ];
 
     for (const schema of schemas) {
       for (const entrada of entradas) {
@@ -194,5 +208,47 @@ describe("publicacaoSchema e contratarSchema", () => {
 
   it("exige o plano escolhido", () => {
     expect(errosDe(contratarSchema, { planoId: "" })).toEqual({ planoId: "Escolha um plano" });
+  });
+});
+
+describe("perfilSchema (editar dados)", () => {
+  const dados = { nome: "Maria Leão da Silva", email: "maria@exemplo.com", dataNascimento: "1995-04-13" };
+
+  it("aceita nome, e-mail e data de nascimento, com a senha atual opcional", () => {
+    expect(perfilSchema.parse(dados)).toEqual(dados);
+    expect(perfilSchema.parse({ ...dados, senhaAtual: "leao1905" }).senhaAtual).toBe("leao1905");
+  });
+
+  it("usa as mesmas regras do cadastro", () => {
+    expect(errosDe(perfilSchema, { nome: "Ma", email: "maria", dataNascimento: "2999-01-01" })).toEqual({
+      nome: "Informe seu nome completo",
+      email: "E-mail inválido",
+      dataNascimento: "Data de nascimento inválida",
+    });
+  });
+
+  it("ignora o CPF: ele não pode ser alterado", () => {
+    expect(perfilSchema.parse({ ...dados, cpf: "11111111111" })).not.toHaveProperty("cpf");
+  });
+});
+
+describe("trocaDeSenhaSchema", () => {
+  it("exige a senha atual e uma nova senha que siga a regra do cadastro (RNF04)", () => {
+    expect(errosDe(trocaDeSenhaSchema, {})).toEqual({
+      senhaAtual: "Informe sua senha atual",
+      novaSenha: "Crie uma nova senha",
+    });
+    expect(errosDe(trocaDeSenhaSchema, { senhaAtual: "leao1905", novaSenha: "curta1" })).toEqual({
+      novaSenha: "A senha deve ter no mínimo 8 caracteres",
+    });
+    expect(errosDe(trocaDeSenhaSchema, { senhaAtual: "leao1905", novaSenha: "semnumeros" })).toEqual({
+      novaSenha: "A senha deve conter números",
+    });
+  });
+
+  it("recusa nova senha igual à atual", () => {
+    expect(errosDe(trocaDeSenhaSchema, { senhaAtual: "leao1905", novaSenha: "leao1905" })).toEqual({
+      novaSenha: "A nova senha deve ser diferente da atual",
+    });
   });
 });

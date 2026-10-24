@@ -86,7 +86,7 @@ function criarBancoFalso() {
           : { data: { user: null }, error: { message: "invalid JWT" } };
       }),
       signInWithPassword: vi.fn(),
-      admin: { createUser: vi.fn(), deleteUser: vi.fn() },
+      admin: { createUser: vi.fn(), deleteUser: vi.fn(), updateUserById: vi.fn() },
     },
   };
 
