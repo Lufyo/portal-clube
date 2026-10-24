@@ -3,6 +3,7 @@ import EditarDados from "../components/EditarDados";
 import Footer from "../components/Footer";
 import Header from "../components/Header";
 import MeuPlano from "../components/MeuPlano";
+import PrivacidadeDados from "../components/PrivacidadeDados";
 import TrocarSenha from "../components/TrocarSenha";
 import { usePerfil } from "../hooks/usePerfil";
 import { Link } from "react-router-dom";
@@ -122,6 +123,8 @@ export default function MinhaArea() {
             Ver mensalidades
           </Link>
         </div>
+
+            <PrivacidadeDados />
           </>
         )}
 

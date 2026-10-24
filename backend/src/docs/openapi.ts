@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { contratarSchema } from "../schemas/assinatura.schema";
-import { loginSchema, perfilSchema, registerSchema, trocaDeSenhaSchema } from "../schemas/auth.schema";
+import {
+  exclusaoDeContaSchema,
+  loginSchema,
+  perfilSchema,
+  registerSchema,
+  trocaDeSenhaSchema,
+} from "../schemas/auth.schema";
 import { compraSchema } from "../schemas/ingresso.schema";
 import { categorias, noticiaSchema, publicacaoSchema, tipos } from "../schemas/noticia.schema";
 
@@ -152,6 +158,27 @@ export const documentoOpenApi = {
           500: r500,
         },
       },
+      delete: {
+        tags: ["Autenticação"],
+        summary: "Excluir minha conta (LGPD)",
+        operationId: "excluirMinhaConta",
+        description:
+          "Pede a senha atual. O login é excluído e o perfil é anonimizado: nome, CPF, e-mail e data de nascimento deixam de existir. O histórico de mensalidades e ingressos fica, sem identificar a pessoa, para a contabilidade do clube. Fica bloqueada (409) enquanto houver mensalidade devida ou ingresso para jogo que ainda não aconteceu.",
+        security: comLogin,
+        requestBody: corpo(exclusaoDeContaSchema, { senhaAtual: "leao1905" }),
+        responses: {
+          200: mensagem("Conta excluída. Seus dados pessoais foram apagados."),
+          400: erro("Senha não informada ou incorreta", {
+            erro: "Senha incorreta",
+            campos: { senhaAtual: "Senha incorreta" },
+          }),
+          401: r401,
+          409: erro("Há pendências", {
+            erro: "Para excluir a conta, pague a mensalidade em aberto e aguarde o jogo com ingresso comprado.",
+          }),
+          500: r500,
+        },
+      },
       patch: {
         tags: ["Autenticação"],
         summary: "Editar meus dados",
@@ -182,6 +209,74 @@ export const documentoOpenApi = {
             erro: "E-mail já cadastrado",
             campos: { email: "E-mail já cadastrado" },
           }),
+          500: r500,
+        },
+      },
+    },
+    "/auth/me/dados": {
+      get: {
+        tags: ["Autenticação"],
+        summary: "Exportar meus dados (LGPD)",
+        operationId: "exportarMeusDados",
+        description:
+          "Tudo o que o portal guarda sobre o sócio: dados pessoais, plano, mensalidades e ingressos. Atende aos direitos de acesso e portabilidade da LGPD (art. 18).",
+        security: comLogin,
+        responses: {
+          200: json("Dados do titular", {
+            type: "object",
+            properties: {
+              geradoEm: { type: "string", format: "date-time" },
+              titular: {
+                type: "object",
+                properties: {
+                  nome: { type: "string" },
+                  email: { type: "string", format: "email" },
+                  cpf: { type: "string" },
+                  dataNascimento: { type: "string", format: "date" },
+                  numeroSocio: { type: "integer" },
+                  perfil: ref("Papel"),
+                  cadastradoEm: { type: "string", format: "date-time" },
+                },
+              },
+              plano: {
+                oneOf: [
+                  { type: "object", properties: { nome: { type: "string" }, precoMensal: { type: "number" } } },
+                  { type: "null" },
+                ],
+              },
+              mensalidades: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    referencia: { type: "string", format: "date" },
+                    plano: { type: ["string", "null"] },
+                    valor: { type: "number" },
+                    vencimento: { type: "string", format: "date" },
+                    status: { type: "string", enum: ["pendente", "paga"] },
+                    pagoEm: { type: ["string", "null"], format: "date-time" },
+                  },
+                },
+              },
+              ingressos: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    codigo: { type: "string" },
+                    jogo: { type: "string", example: "Sport x Náutico" },
+                    data: { type: "string", format: "date-time" },
+                    local: { type: "string" },
+                    competicao: { type: "string" },
+                    setor: { type: ["string", "null"] },
+                    valorPago: { type: "number" },
+                    compradoEm: { type: "string", format: "date-time" },
+                  },
+                },
+              },
+            },
+          }),
+          401: r401,
           500: r500,
         },
       },

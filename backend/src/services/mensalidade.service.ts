@@ -18,7 +18,7 @@ function cobrancaDoMes(ano: number, mes: number) {
 }
 
 // Cobrança do mês corrente no Brasil
-function cobrancaDoMesAtual() {
+export function cobrancaDoMesAtual() {
   const [ano, mes] = hojeNoBrasil().split("-").map(Number);
   return cobrancaDoMes(ano, mes);
 }

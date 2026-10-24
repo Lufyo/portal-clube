@@ -3,6 +3,7 @@ import { contratarSchema } from "../../src/schemas/assinatura.schema";
 import {
   loginSchema,
   perfilSchema,
+  exclusaoDeContaSchema,
   registerSchema,
   trocaDeSenhaSchema,
 } from "../../src/schemas/auth.schema";
@@ -183,6 +184,7 @@ describe("campos ausentes", () => {
       loginSchema,
       perfilSchema,
       trocaDeSenhaSchema,
+      exclusaoDeContaSchema,
       compraSchema,
       contratarSchema,
       noticiaSchema,

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import {
+  exclusaoDeContaSchema,
   loginSchema,
   perfilSchema,
   registerSchema,
@@ -12,6 +13,7 @@ import {
   registrarSocio,
   trocarSenha,
 } from "../services/auth.service";
+import { excluirConta, exportarDados } from "../services/lgpd.service";
 import { formatarErrosZod, responderErro } from "../utils/respostas";
 
 export async function registrar(req: Request, res: Response) {
@@ -114,6 +116,34 @@ export async function alterarSenha(req: Request, res: Response) {
     const { token } = await trocarSenha(res.locals.usuarioId, res.locals.email, resultado.data);
     // O token antigo deixou de valer: o novo vai junto para o site trocar
     res.json({ mensagem: "Senha alterada com sucesso", token });
+  } catch (erro) {
+    responderErro(res, erro);
+  }
+}
+
+// LGPD: o sócio baixa tudo o que o portal guarda sobre ele
+export async function exportarMeusDados(_req: Request, res: Response) {
+  try {
+    res.json(await exportarDados(res.locals.usuarioId, res.locals.email));
+  } catch (erro) {
+    responderErro(res, erro);
+  }
+}
+
+// LGPD: exclusão da conta, com o perfil anonimizado (ver lgpd.service)
+export async function excluirMinhaConta(req: Request, res: Response) {
+  const resultado = exclusaoDeContaSchema.safeParse(req.body);
+  if (!resultado.success) {
+    res.status(400).json({
+      erro: "Dados inválidos",
+      campos: formatarErrosZod(resultado.error),
+    });
+    return;
+  }
+
+  try {
+    await excluirConta(res.locals.usuarioId, res.locals.email, resultado.data);
+    res.json({ mensagem: "Conta excluída. Seus dados pessoais foram apagados." });
   } catch (erro) {
     responderErro(res, erro);
   }
