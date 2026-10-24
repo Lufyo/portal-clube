@@ -1,4 +1,4 @@
-import { removerMensalidadesPendentes } from "./mensalidade.service";
+import { gerarPrimeiraMensalidade, removerMensalidadesPendentes } from "./mensalidade.service";
 import { supabase } from "../config/supabase";
 import { ErroDeNegocio } from "../errors/ErroDeNegocio";
 
@@ -28,7 +28,7 @@ export async function contratarPlano(usuarioId: string, planoId: string) {
   // Confere se o plano existe e está ativo
   const { data: plano, error: erroPlano } = await supabase
     .from("planos")
-    .select("id, nome")
+    .select("id, nome, preco_mensal")
     .eq("id", planoId)
     .eq("ativo", true)
     .maybeSingle();
@@ -43,7 +43,20 @@ export async function contratarPlano(usuarioId: string, planoId: string) {
     throw new ErroDeNegocio("Plano não encontrado", 404, "planoId");
   }
 
-  // Contratar e trocar de plano são a mesma operação: grava o plano no perfil
+  // Quem já tinha plano está trocando; quem não tinha está assinando agora
+  const { data: perfil, error: erroPerfil } = await supabase
+    .from("perfis")
+    .select("plano_id")
+    .eq("id", usuarioId)
+    .maybeSingle();
+
+  if (erroPerfil) {
+    console.error(erroPerfil);
+    throw new ErroDeNegocio("Não foi possível contratar o plano", 500);
+  }
+  const assinaturaNova = !perfil?.plano_id;
+
+  // Contratar e trocar de plano gravam o plano no perfil do mesmo jeito
   const { error } = await supabase
     .from("perfis")
     .update({ plano_id: plano.id })
@@ -54,8 +67,13 @@ export async function contratarPlano(usuarioId: string, planoId: string) {
     throw new ErroDeNegocio("Não foi possível contratar o plano", 500);
   }
 
-  // A cobrança do novo plano será recriada quando o sócio abrir as mensalidades
+  // Na troca, a cobrança do mês é recriada com o plano novo quando o sócio
+  // abrir as mensalidades. Na assinatura nova, a primeira cobrança é gerada
+  // já agora, no mês certo (o seguinte, se o dia do vencimento já passou).
   await removerMensalidadesPendentes(usuarioId);
+  if (assinaturaNova) {
+    await gerarPrimeiraMensalidade(usuarioId, plano);
+  }
 
   return { id: plano.id, nome: plano.nome };
 }

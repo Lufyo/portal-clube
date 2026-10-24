@@ -168,7 +168,7 @@ export const documentoOpenApi = {
         summary: "Contratar plano",
         operationId: "contratarPlano",
         description:
-          "Também serve para trocar de plano. As mensalidades pendentes são apagadas e a cobrança do novo plano é gerada na próxima consulta.",
+          "Na assinatura nova, já gera a primeira mensalidade: a do mês atual se for até o dia 10, ou a do mês seguinte se o dia 10 já passou (ninguém começa em atraso). Também serve para trocar de plano: as mensalidades pendentes são apagadas e a do mês é gerada de novo, com o plano novo, na próxima consulta.",
         security: comLogin,
         requestBody: corpo(contratarSchema, { planoId: "00000000-0000-0000-0000-000000000000" }),
         responses: {
@@ -205,7 +205,7 @@ export const documentoOpenApi = {
         summary: "Listar mensalidades do sócio",
         operationId: "listarMensalidades",
         description:
-          "Gera a cobrança do mês atual na primeira consulta (vencimento no dia 10, fuso de São Paulo), sem duplicar.",
+          "Gera a cobrança do mês atual na primeira consulta (vencimento no dia 10, fuso de São Paulo), sem duplicar. Não gera o mês da assinatura de quem assinou depois do dia 10: a primeira cobrança dessa pessoa é a do mês seguinte.",
         security: comLogin,
         responses: {
           200: json("Mensalidades", lista("Mensalidade")),

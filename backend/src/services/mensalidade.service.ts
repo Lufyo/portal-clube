@@ -11,6 +11,46 @@ function hojeNoBrasil() {
   });
 }
 
+// Cobrança de um mês: referência no dia 1º e vencimento no dia 10
+function cobrancaDoMes(ano: number, mes: number) {
+  const aaaaMm = `${ano}-${String(mes).padStart(2, "0")}`;
+  return { referencia: `${aaaaMm}-01`, vencimento: `${aaaaMm}-${DIA_VENCIMENTO}` };
+}
+
+// Grava a cobrança; se a do mês já existe, não faz nada (nem sobrescreve)
+async function gravarCobranca(
+  usuarioId: string,
+  plano: { id: string; preco_mensal: number },
+  cobranca: { referencia: string; vencimento: string }
+) {
+  const { error } = await supabase.from("mensalidades").upsert(
+    { usuario_id: usuarioId, plano_id: plano.id, valor: plano.preco_mensal, ...cobranca },
+    { onConflict: "usuario_id,referencia", ignoreDuplicates: true }
+  );
+
+  if (error) {
+    console.error(error);
+    throw new ErroDeNegocio("Não foi possível gerar a mensalidade", 500);
+  }
+}
+
+// Primeira cobrança de quem acabou de assinar. Até o dia do vencimento, é a do
+// mês atual; depois dele, a do mês seguinte, para ninguém já nascer em atraso.
+export async function gerarPrimeiraMensalidade(
+  usuarioId: string,
+  plano: { id: string; preco_mensal: number }
+) {
+  const [ano, mes, dia] = hojeNoBrasil().split("-").map(Number);
+  const cobranca =
+    dia <= Number(DIA_VENCIMENTO)
+      ? cobrancaDoMes(ano, mes)
+      : mes === 12
+        ? cobrancaDoMes(ano + 1, 1)
+        : cobrancaDoMes(ano, mes + 1);
+
+  await gravarCobranca(usuarioId, plano, cobranca);
+}
+
 // Sem os tipos gerados do banco, o supabase-js trata "plano:planos(...)" como
 // lista. Perfil e mensalidade apontam para um plano só: chega objeto (ou null).
 type PlanoDoPerfil = { plano: { id: string; preco_mensal: number } | null };
@@ -46,23 +86,23 @@ export async function listarMensalidades(usuarioId: string) {
 
   // 2. Se tem plano, garante a cobrança do mês atual
   if (perfil.plano) {
-    const [ano, mes] = hojeNoBrasil().split("-");
+    const [ano, mes] = hojeNoBrasil().split("-").map(Number);
+    const doMes = cobrancaDoMes(ano, mes);
 
-    const { error: erroCobranca } = await supabase.from("mensalidades").upsert(
-      {
-        usuario_id: usuarioId,
-        plano_id: perfil.plano.id,
-        referencia: `${ano}-${mes}-01`,
-        valor: perfil.plano.preco_mensal,
-        vencimento: `${ano}-${mes}-${DIA_VENCIMENTO}`,
-      },
-      // Se a cobrança do mês já existe, não faz nada (nem sobrescreve)
-      { onConflict: "usuario_id,referencia", ignoreDuplicates: true }
-    );
+    // Cobrança de um mês seguinte já existe quando o sócio assinou depois do
+    // vencimento (ver gerarPrimeiraMensalidade): o mês da assinatura não é cobrado
+    const { count, error: erroFuturas } = await supabase
+      .from("mensalidades")
+      .select("id", { count: "exact", head: true })
+      .eq("usuario_id", usuarioId)
+      .gt("referencia", doMes.referencia);
 
-    if (erroCobranca) {
-      console.error(erroCobranca);
-      throw new ErroDeNegocio("Não foi possível gerar a mensalidade", 500);
+    if (erroFuturas) {
+      console.error(erroFuturas);
+      throw new ErroDeNegocio("Não foi possível carregar as mensalidades", 500);
+    }
+    if (!count) {
+      await gravarCobranca(usuarioId, perfil.plano, doMes);
     }
   }
 

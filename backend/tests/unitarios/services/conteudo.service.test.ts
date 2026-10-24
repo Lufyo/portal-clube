@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { obterResumo } from "../../../src/services/admin.service";
 import { listarJogos } from "../../../src/services/jogo.service";
 import {
@@ -46,14 +46,75 @@ describe("plano.service", () => {
     expect(banco.consultasA("perfis")).toHaveLength(0);
   });
 
-  it("contratar grava o plano no perfil e apaga as cobranças pendentes do plano antigo", async () => {
-    banco.responder("planos", { data: { id: "p2", nome: "Leão Ouro" } });
-    banco.responder("perfis", {});
+  it("trocar de plano grava o plano novo e apaga as cobranças pendentes do antigo", async () => {
+    banco.responder("planos", { data: { id: "p2", nome: "Leão Ouro", preco_mensal: 99.9 } });
+    // Já tinha plano: é troca, não assinatura nova
+    banco.responder("perfis", { data: { plano_id: "p1" } }, {});
     banco.responder("mensalidades", {});
 
     expect(await contratarPlano("u1", "p2")).toEqual({ id: "p2", nome: "Leão Ouro" });
-    expect(operacao("perfis", 0, "update")!.argumentos[0]).toEqual({ plano_id: "p2" });
+    expect(operacao("perfis", 1, "update")!.argumentos[0]).toEqual({ plano_id: "p2" });
     expect(filtrosEq(banco.consultasA("mensalidades")[0])).toEqual({ usuario_id: "u1", status: "pendente" });
+    // A cobrança do mês, já com o plano novo, é gerada ao listar as mensalidades
+    expect(banco.consultasA("mensalidades")).toHaveLength(1);
+  });
+
+  it("falha do banco ao ler o plano atual do sócio é erro do servidor", async () => {
+    banco.responder("planos", { data: { id: "p2", nome: "Leão Ouro", preco_mensal: 99.9 } });
+    banco.responder("perfis", { data: null, error: { message: "timeout" } });
+
+    await expect(contratarPlano("u1", "p2")).rejects.toMatchObject({ status: 500 });
+  });
+
+  describe("assinatura nova: a primeira mensalidade nunca nasce em atraso", () => {
+    // Assina às 12h (horário de Brasília) do dia informado
+    async function assinarEm(dataEmBrasilia: string) {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(`${dataEmBrasilia}T15:00:00Z`));
+      banco.responder("planos", { data: { id: "p2", nome: "Leão", preco_mensal: 59.9 } });
+      banco.responder("perfis", { data: { plano_id: null } }, {});
+      banco.responder("mensalidades", {}, {});
+
+      await contratarPlano("u1", "p2");
+
+      const upsert = operacao("mensalidades", 1, "upsert")!;
+      return upsert.argumentos;
+    }
+
+    it("até o dia 10, a primeira cobrança é a do mês atual, vencendo no dia 10", async () => {
+      const [cobranca, opcoes] = await assinarEm("2026-10-10");
+
+      expect(cobranca).toEqual({
+        usuario_id: "u1",
+        plano_id: "p2",
+        referencia: "2026-10-01",
+        valor: 59.9,
+        vencimento: "2026-10-10",
+      });
+      expect(opcoes).toEqual({ onConflict: "usuario_id,referencia", ignoreDuplicates: true });
+    });
+
+    it("depois do dia 10, a primeira cobrança é a do mês seguinte", async () => {
+      const [cobranca] = await assinarEm("2026-10-24");
+      expect(cobranca).toMatchObject({ referencia: "2026-11-01", vencimento: "2026-11-10" });
+    });
+
+    it("em dezembro depois do dia 10, a primeira cobrança é a de janeiro do ano seguinte", async () => {
+      const [cobranca] = await assinarEm("2026-12-20");
+      expect(cobranca).toMatchObject({ referencia: "2027-01-01", vencimento: "2027-01-10" });
+    });
+
+    it("usa o dia do Brasil: 01h de 11/10 em UTC ainda é dia 10 em São Paulo", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-10-11T01:00:00Z"));
+      banco.responder("planos", { data: { id: "p2", nome: "Leão", preco_mensal: 59.9 } });
+      banco.responder("perfis", { data: { plano_id: null } }, {});
+      banco.responder("mensalidades", {}, {});
+
+      await contratarPlano("u1", "p2");
+
+      expect(operacao("mensalidades", 1, "upsert")!.argumentos[0]).toMatchObject({ referencia: "2026-10-01" });
+    });
   });
 
   it("cancelar tira o plano e apaga as cobranças pendentes", async () => {

@@ -200,7 +200,7 @@ A documentação está em `backend/src/docs/openapi.ts`. O corpo de cada requisi
 ## Regras de negócio
 
 - **Cadastro:** CPF validado pelos dígitos verificadores; senha com no mínimo 8 caracteres, letras e números. Se gravar o perfil falhar, o usuário criado no Auth é apagado (sem cadastro pela metade).
-- **Mensalidades:** a cobrança do mês é criada quando o sócio abre suas mensalidades, com vencimento no dia 10, sem duplicar, no fuso de São Paulo. O pagamento só é registrado: ainda não há Pix nem cartão.
+- **Mensalidades:** o vencimento é sempre no dia 10, no fuso de São Paulo. Na assinatura nova, a primeira cobrança já é criada: a do mês atual se for até o dia 10, ou a do mês seguinte se o dia 10 já passou, para ninguém começar em atraso. Depois, a cobrança de cada mês é criada quando o sócio abre suas mensalidades, sem duplicar. Na troca de plano, as pendentes são apagadas e a do mês é refeita com o plano novo. O pagamento só é registrado: ainda não há Pix nem cartão.
 - **Ingressos:** até 4 por jogo por sócio, limitado aos lugares do setor, venda encerrada depois do jogo e desconto conforme o plano. O id do comprador vem sempre do token, nunca do corpo da requisição.
 - **Notícias:** nascem como rascunho; tipos (`Notícia`, `Coletiva`, `Comunicado`, `Entrevista`) e categorias (`Profissional masculino`, `Profissional feminino`, `Categorias de base`, `Esportes olímpicos`) são listas fixas, iguais no banco, no schema Zod e no frontend.
 
