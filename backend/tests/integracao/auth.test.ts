@@ -300,3 +300,74 @@ describe("as rotas da conta só mexem na conta do dono do token", () => {
     }
   });
 });
+
+describe("LGPD: GET /api/auth/me/dados e DELETE /api/auth/me", () => {
+  it("as duas rotas exigem login", async () => {
+    expect((await api().get("/api/auth/me/dados")).status).toBe(401);
+    expect((await api().delete("/api/auth/me").send({ senhaAtual: "x" })).status).toBe(401);
+  });
+
+  it("exporta só os dados do dono do token", async () => {
+    const cabecalho = entrarComo("u1");
+    banco.responder("perfis", {
+      data: { nome: "Maria", cpf: "1", data_nascimento: "1995-04-13", numero_socio: 1, papel: "socio", criado_em: "2026-01-01T00:00:00Z", plano: null },
+    });
+    banco.responder("mensalidades", { data: [] });
+    banco.responder("ingressos", { data: [] });
+
+    const resposta = await api().get("/api/auth/me/dados").set(cabecalho);
+
+    expect(resposta.status).toBe(200);
+    expect(resposta.body.titular).toMatchObject({ nome: "Maria", email: "u1@exemplo.com" });
+    expect(resposta.body.plano).toBeNull();
+    for (const tabela of ["perfis", "mensalidades", "ingressos"]) {
+      const valores = banco.consultasA(tabela)[0].operacoes.filter((o) => o.metodo === "eq").map((o) => o.argumentos[1]);
+      expect(valores).toContain("u1");
+    }
+  });
+
+  it("excluir a conta exige a senha atual", async () => {
+    const resposta = await api().delete("/api/auth/me").set(entrarComo("u1")).send({});
+
+    expect(resposta.status).toBe(400);
+    expect(resposta.body.campos).toEqual({ senhaAtual: "Informe sua senha atual" });
+    expect(banco.cliente.auth.signInWithPassword).not.toHaveBeenCalled();
+  });
+
+  it("com pendências, responde 409 explicando o que falta", async () => {
+    const cabecalho = entrarComo("u1");
+    banco.cliente.auth.signInWithPassword.mockResolvedValueOnce({
+      data: { session: { access_token: "t" }, user: { id: "u1" } },
+      error: null,
+    });
+    banco.responder("mensalidades", { count: 1 });
+    banco.responder("ingressos", { data: [] });
+
+    const resposta = await api().delete("/api/auth/me").set(cabecalho).send({ senhaAtual: "leao1905" });
+
+    expect(resposta.status).toBe(409);
+    expect(resposta.body).toEqual({ erro: "Para excluir a conta, pague a mensalidade em aberto." });
+  });
+
+  it("sem pendências, exclui a conta do dono do token, mesmo com outro id no corpo", async () => {
+    const cabecalho = entrarComo("u1");
+    banco.cliente.auth.signInWithPassword.mockResolvedValueOnce({
+      data: { session: { access_token: "t" }, user: { id: "u1" } },
+      error: null,
+    });
+    banco.responder("mensalidades", { count: 0 }, {});
+    banco.responder("ingressos", { data: [] });
+    banco.responder("perfis", {});
+    banco.cliente.auth.admin.deleteUser.mockResolvedValueOnce({ data: {}, error: null });
+
+    const resposta = await api()
+      .delete("/api/auth/me")
+      .set(cabecalho)
+      .send({ senhaAtual: "leao1905", usuarioId: "outra-conta" });
+
+    expect(resposta.status).toBe(200);
+    expect(resposta.body).toEqual({ mensagem: "Conta excluída. Seus dados pessoais foram apagados." });
+    expect(banco.cliente.auth.signInWithPassword).toHaveBeenCalledWith({ email: "u1@exemplo.com", password: "leao1905" });
+    expect(banco.cliente.auth.admin.deleteUser).toHaveBeenCalledWith("u1", true);
+  });
+});

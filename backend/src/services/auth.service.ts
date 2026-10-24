@@ -110,7 +110,7 @@ export async function buscarPerfil(id: string) {
 }
 // Confere a senha do usuário tentando um login com ela. Usa um cliente
 // temporário, como o autenticarSocio, para não misturar sessões.
-async function senhaConfere(email: string, senha: string) {
+export async function senhaConfere(email: string, senha: string) {
   const { data, error } = await criarCliente().auth.signInWithPassword({ email, password: senha });
   return !error && Boolean(data.session);
 }

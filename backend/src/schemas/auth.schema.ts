@@ -82,3 +82,10 @@ export const trocaDeSenhaSchema = z
   });
 
 export type TrocaDeSenhaInput = z.infer<typeof trocaDeSenhaSchema>;
+
+// Excluir a conta pede a senha: quem pegar uma sessão aberta não apaga a conta
+export const exclusaoDeContaSchema = z.object({
+  senhaAtual: z.string({ message: "Informe sua senha atual" }).min(1, "Informe sua senha atual"),
+});
+
+export type ExclusaoDeContaInput = z.infer<typeof exclusaoDeContaSchema>;

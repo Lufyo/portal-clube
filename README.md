@@ -173,6 +173,8 @@ Todas começam com `/api`.
 | `GET /auth/me` | Logado | Dados do usuário autenticado |
 | `PATCH /auth/me` | Logado | Editar nome, e-mail e data de nascimento (o CPF não muda; trocar o e-mail pede a senha atual) |
 | `PUT /auth/senha` | Logado | Trocar a senha, conferindo a senha atual |
+| `GET /auth/me/dados` | Logado | LGPD: exportar tudo o que o portal guarda sobre o sócio |
+| `DELETE /auth/me` | Logado | LGPD: excluir a conta (pede a senha; anonimiza o perfil) |
 | `GET /planos` | Público | Planos de sócio |
 | `POST /assinatura` · `DELETE /assinatura` | Logado | Contratar ou cancelar plano |
 | `GET /mensalidades` · `POST /mensalidades/:id/pagar` | Logado | Listar e pagar mensalidades |
@@ -205,6 +207,8 @@ A documentação está em `backend/src/docs/openapi.ts`. O corpo de cada requisi
 - **Mensalidades:** o vencimento é sempre no dia 10, no fuso de São Paulo. Na assinatura nova, a primeira cobrança já é criada: a do mês atual se for até o dia 10, ou a do mês seguinte se o dia 10 já passou, para ninguém começar em atraso. Depois, a cobrança de cada mês é criada quando o sócio abre suas mensalidades, sem duplicar. Na troca de plano, as pendentes do mês atual em diante passam para o plano novo, com o preço novo. Ao cancelar, a cobrança do mês atual é garantida (quem foi sócio no mês deve o mês) e só as de meses que ainda não começaram são apagadas. Nenhuma dívida some por trocar de plano, cancelar ou assinar de novo. O pagamento só é registrado: ainda não há Pix nem cartão.
 - **Ingressos:** até 4 por jogo por sócio, limitado aos lugares do setor, venda encerrada depois do jogo e desconto conforme o plano. O id do comprador vem sempre do token, nunca do corpo da requisição.
 - **Notícias:** nascem como rascunho; tipos (`Notícia`, `Coletiva`, `Comunicado`, `Entrevista`) e categorias (`Profissional masculino`, `Profissional feminino`, `Categorias de base`, `Esportes olímpicos`) são listas fixas, iguais no banco, no schema Zod e no frontend.
+
+- **LGPD (exclusão da conta):** pede a senha atual e fica bloqueada enquanto houver mensalidade não paga do mês atual ou de antes, ou ingresso para jogo que ainda não aconteceu. Na exclusão, as cobranças de meses futuros são apagadas, o perfil é anonimizado (nome "Sócio removido", CPF trocado por `removido-<id>`, data de nascimento 1900-01-01, sem plano) e o login passa por uma exclusão suave no Supabase Auth, que apaga o e-mail e impede o acesso sem apagar o histórico em cascata. Mensalidades e ingressos ficam, sem identificar a pessoa, para a contabilidade do clube.
 
 ## Banco de dados
 
