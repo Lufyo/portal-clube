@@ -30,13 +30,13 @@ O frontend nunca acessa o banco diretamente: tudo passa pela API.
 
 | Parte | O quê |
 | --- | --- |
-| Frontend | React 19, TypeScript, Vite 8, Tailwind CSS 4, React Router 7, qrcode.react, fonte Archivo (@fontsource), ESLint |
-| Backend | Node.js, TypeScript, Express 5, Zod 4, supabase-js, cors, dotenv, tsx, swagger-ui-express (documentação da API) |
+| Frontend | React 19, TypeScript, Vite 8, Tailwind CSS 4, React Router 7, qrcode.react, fonte Archivo (@fontsource), ESLint, Vitest + Testing Library (testes) |
+| Backend | Node.js, TypeScript, Express 5, Zod 4, supabase-js, cors, dotenv, tsx, swagger-ui-express (documentação da API), Vitest + supertest (testes) |
 | Banco e login | Supabase (PostgreSQL gerenciado + Supabase Auth) |
 
 ## Como rodar
 
-Precisa do **Node 20.19 ou mais novo** (exigência do Vite 8) e de um projeto no [Supabase](https://supabase.com) com as tabelas descritas em [Banco de dados](#banco-de-dados).
+Precisa do **Node 22.12 ou mais novo** (exigência do Vitest 5, usado nos testes) e de um projeto no [Supabase](https://supabase.com) com as tabelas descritas em [Banco de dados](#banco-de-dados).
 
 ### 1. API
 
@@ -79,6 +79,7 @@ npm install
 npm run dev      # abre em http://localhost:5173
 npm run lint     # confere o código
 npm run build    # confere os tipos e gera o site em dist/
+npm test         # roda os testes
 ```
 
 O site chama `http://localhost:3333/api` por padrão. Para outro endereço, copie `frontend/.env.example` para `frontend/.env` e ajuste o `VITE_API_URL`. Tudo que começa com `VITE_` vai para o navegador: nunca coloque chaves secretas no `.env` do frontend.
@@ -120,6 +121,47 @@ portal-clube/
 ```
 
 Cada assunto do backend segue o mesmo caminho: `routes/x.routes.ts` → `controllers/x.controller.ts` → `schemas/x.schema.ts` → `services/x.service.ts`. No frontend, cada página delega a busca de dados a um hook, e o hook chama a API sempre por `api()` de `services/api.ts`.
+
+## Testes
+
+Os testes não precisam do Supabase nem de `.env`: o banco (no backend) e a API (no frontend) são trocados por versões falsas em memória. Rode dentro de `backend/` ou de `frontend/`:
+
+```bash
+npm test                  # todos
+npm run test:unitarios    # só os unitários
+npm run test:integracao   # só os de integração
+npm run test:watch        # roda de novo a cada alteração
+```
+
+| Pasta | O que testa |
+| --- | --- |
+| `backend/tests/unitarios/` | schemas Zod (CPF, senha, limite de ingressos...), respostas de erro, middlewares de login e perfil e as regras de cada service (desconto, lugares por setor, mensalidade no fuso de São Paulo, cadastro desfeito se o perfil falhar...) |
+| `backend/tests/integracao/` | requisições HTTP de verdade contra o `app` Express (`supertest`), passando por rota → middlewares → controller → service: cadastro e login, matriz de permissões do painel, assinatura, mensalidades, compra de ingressos, CORS, `/health` e a documentação da API |
+| `frontend/tests/unitarios/` | formatadores, regras de permissão e o `api.ts` (token, corpo, erros e falha de rede) |
+| `frontend/tests/integracao/` | o app inteiro renderizado (Testing Library): acesso às páginas por perfil, login com volta à página de origem, erros nos campos e pagamento de mensalidade |
+
+### Como escrever um teste
+
+**Backend:** o `tests/apoio/preparacao.ts` troca `src/config/supabase` pelo banco falso de `tests/apoio/supabaseFalso.ts`. Cada teste diz o que cada tabela responde, na ordem das consultas, e pode conferir os filtros usados:
+
+```ts
+banco.responder("mensalidades", { data: { id: "m1", status: "pendente" } }, {});
+await pagarMensalidade("u1", "m1");
+expect(filtrosEq(banco.consultasA("mensalidades")[1])).toEqual({ id: "m1", usuario_id: "u1" });
+```
+
+Nos testes de integração, `entrarComo("u1", "editor")` (em `tests/apoio/api.ts`) cria o token e responde a consulta de perfil do `exigirPapel`. Resposta configurada que nenhuma consulta usou faz o teste falhar: assim um teste não passa por engano.
+
+**Frontend:** `tests/apoio/apiFalsa.ts` substitui o `fetch`. `abrirApp("/mensalidades")` renderiza o app numa URL e `jaLogadoComo("socio")` simula um login salvo:
+
+```ts
+jaLogadoComo("socio");
+apiFalsa.responder("GET", "/mensalidades", 200, [mensalidade]);
+abrirApp("/mensalidades");
+expect(await screen.findByText("Pendente")).toBeInTheDocument();
+```
+
+Chamada à API sem resposta configurada falha o teste. No frontend, os testes também passam pelo `tsc` no `npm run build`.
 
 ## Rotas da API
 
@@ -185,11 +227,11 @@ A compra de ingressos é feita pela função `comprar_ingressos(p_usuario, p_jog
 ## Problemas conhecidos
 
 - **CORS** aceita só `http://localhost:5173` (`backend/src/app.ts`); para publicar, o endereço do site precisa vir de configuração.
-- Não há testes automatizados.
 
 ## Convenções
 
 - Textos de tela, comentários, nomes de arquivos e de funções em português.
 - Cor, fonte e espaçamento vêm dos tokens do tema em `frontend/src/index.css` (ex.: `bg-rubro`, `text-marfim`), nunca de códigos soltos.
-- Endpoint novo: rota → controller → schema Zod → service, com erros via `ErroDeNegocio`, e a rota documentada em `backend/src/docs/openapi.ts`.
+- Endpoint novo: rota → controller → schema Zod → service, com erros via `ErroDeNegocio`, a rota documentada em `backend/src/docs/openapi.ts` e testes unitários e de integração.
+- Antes de abrir um PR: `npm test`, `npm run lint` (frontend) e `npm run build` sem erros.
 - Nunca suba o `.env` nem a chave `service_role` para o Git.
