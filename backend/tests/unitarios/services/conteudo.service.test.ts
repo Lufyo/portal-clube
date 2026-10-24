@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { obterResumo } from "../../../src/services/admin.service";
 import { listarJogos } from "../../../src/services/jogo.service";
 import {
@@ -46,23 +46,132 @@ describe("plano.service", () => {
     expect(banco.consultasA("perfis")).toHaveLength(0);
   });
 
-  it("contratar grava o plano no perfil e apaga as cobranças pendentes do plano antigo", async () => {
-    banco.responder("planos", { data: { id: "p2", nome: "Leão Ouro" } });
-    banco.responder("perfis", {});
+  it("trocar de plano grava o plano novo e reajusta as pendentes, sem apagar dívida", async () => {
+    banco.responder("planos", { data: { id: "p2", nome: "Leão Ouro", preco_mensal: 99.9 } });
+    // Já tinha plano: é troca, não assinatura nova
+    banco.responder("perfis", { data: { plano_id: "p1" } }, {});
     banco.responder("mensalidades", {});
 
     expect(await contratarPlano("u1", "p2")).toEqual({ id: "p2", nome: "Leão Ouro" });
-    expect(operacao("perfis", 0, "update")!.argumentos[0]).toEqual({ plano_id: "p2" });
-    expect(filtrosEq(banco.consultasA("mensalidades")[0])).toEqual({ usuario_id: "u1", status: "pendente" });
+    expect(operacao("perfis", 1, "update")!.argumentos[0]).toEqual({ plano_id: "p2" });
+    const [reajuste] = banco.consultasA("mensalidades");
+    expect(reajuste.operacoes.find((o) => o.metodo === "update")!.argumentos[0]).toEqual({ plano_id: "p2", valor: 99.9 });
+    expect(reajuste.operacoes.some((o) => o.metodo === "delete" || o.metodo === "upsert")).toBe(false);
   });
 
-  it("cancelar tira o plano e apaga as cobranças pendentes", async () => {
-    banco.responder("perfis", {});
-    banco.responder("mensalidades", {});
+  it("falha do banco ao ler o plano atual do sócio é erro do servidor", async () => {
+    banco.responder("planos", { data: { id: "p2", nome: "Leão Ouro", preco_mensal: 99.9 } });
+    banco.responder("perfis", { data: null, error: { message: "timeout" } });
 
-    await cancelarPlano("u1");
+    await expect(contratarPlano("u1", "p2")).rejects.toMatchObject({ status: 500 });
+  });
 
-    expect(operacao("perfis", 0, "update")!.argumentos[0]).toEqual({ plano_id: null });
+  describe("assinatura nova: a primeira mensalidade nunca nasce em atraso", () => {
+    // Assina às 12h (horário de Brasília) do dia informado
+    async function assinarEm(dataEmBrasilia: string) {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(`${dataEmBrasilia}T15:00:00Z`));
+      banco.responder("planos", { data: { id: "p2", nome: "Leão", preco_mensal: 59.9 } });
+      banco.responder("perfis", { data: { plano_id: null } }, {});
+      banco.responder("mensalidades", {});
+
+      await contratarPlano("u1", "p2");
+
+      // Assinar de novo não apaga dívida antiga: só cria a primeira cobrança
+      expect(banco.consultasA("mensalidades")).toHaveLength(1);
+      const upsert = operacao("mensalidades", 0, "upsert")!;
+      return upsert.argumentos;
+    }
+
+    it("até o dia 10, a primeira cobrança é a do mês atual, vencendo no dia 10", async () => {
+      const [cobranca, opcoes] = await assinarEm("2026-10-10");
+
+      expect(cobranca).toEqual({
+        usuario_id: "u1",
+        plano_id: "p2",
+        referencia: "2026-10-01",
+        valor: 59.9,
+        vencimento: "2026-10-10",
+      });
+      expect(opcoes).toEqual({ onConflict: "usuario_id,referencia", ignoreDuplicates: true });
+    });
+
+    it("depois do dia 10, a primeira cobrança é a do mês seguinte", async () => {
+      const [cobranca] = await assinarEm("2026-10-24");
+      expect(cobranca).toMatchObject({ referencia: "2026-11-01", vencimento: "2026-11-10" });
+    });
+
+    it("em dezembro depois do dia 10, a primeira cobrança é a de janeiro do ano seguinte", async () => {
+      const [cobranca] = await assinarEm("2026-12-20");
+      expect(cobranca).toMatchObject({ referencia: "2027-01-01", vencimento: "2027-01-10" });
+    });
+
+    it("usa o dia do Brasil: 01h de 11/10 em UTC ainda é dia 10 em São Paulo", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-10-11T01:00:00Z"));
+      banco.responder("planos", { data: { id: "p2", nome: "Leão", preco_mensal: 59.9 } });
+      banco.responder("perfis", { data: { plano_id: null } }, {});
+      banco.responder("mensalidades", {});
+
+      await contratarPlano("u1", "p2");
+
+      expect(operacao("mensalidades", 0, "upsert")!.argumentos[0]).toMatchObject({ referencia: "2026-10-01" });
+    });
+  });
+
+  describe("cancelar não apaga o que a pessoa deve", () => {
+    const plano = { plano: { id: "p1", preco_mensal: 59.9 } };
+
+    it("garante a cobrança do mês atual, tira o plano e apaga só as de meses futuros", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-10-20T15:00:00Z"));
+      banco.responder("perfis", { data: plano }, {});
+      // nenhuma cobrança futura → grava outubro; depois apaga as futuras
+      banco.responder("mensalidades", { count: 0 }, {}, {});
+
+      await cancelarPlano("u1");
+
+      const [, cobranca, limpeza] = banco.consultasA("mensalidades");
+      expect(cobranca.operacoes.find((o) => o.metodo === "upsert")!.argumentos[0]).toMatchObject({
+        referencia: "2026-10-01",
+        vencimento: "2026-10-10",
+        valor: 59.9,
+      });
+      expect(operacao("perfis", 1, "update")!.argumentos[0]).toEqual({ plano_id: null });
+      expect(limpeza.operacoes.some((o) => o.metodo === "delete")).toBe(true);
+      expect(limpeza.operacoes).toContainEqual({ metodo: "gt", argumentos: ["referencia", "2026-10-01"] });
+    });
+
+    it("quem assinou depois do dia 10 e cancela no mesmo mês não passa a dever esse mês", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-10-25T15:00:00Z"));
+      banco.responder("perfis", { data: plano }, {});
+      // já existe a cobrança de novembro (da assinatura) → outubro não é gerado
+      banco.responder("mensalidades", { count: 1 }, {});
+
+      await cancelarPlano("u1");
+
+      const consultas = banco.consultasA("mensalidades");
+      expect(consultas.some((c) => c.operacoes.some((o) => o.metodo === "upsert"))).toBe(false);
+      // e a cobrança de novembro, que ainda não começou, é apagada
+      expect(consultas[1].operacoes.some((o) => o.metodo === "delete")).toBe(true);
+    });
+
+    it("sem plano, só confirma o cancelamento", async () => {
+      banco.responder("perfis", { data: { plano: null } }, {});
+      banco.responder("mensalidades", {});
+
+      await cancelarPlano("u1");
+
+      expect(operacao("perfis", 1, "update")!.argumentos[0]).toEqual({ plano_id: null });
+    });
+
+    it("falha do banco ao ler o plano é erro do servidor, e o plano não é cancelado", async () => {
+      banco.responder("perfis", { data: null, error: { message: "timeout" } });
+
+      await expect(cancelarPlano("u1")).rejects.toMatchObject({ status: 500 });
+      expect(banco.consultasA("perfis")).toHaveLength(1);
+    });
   });
 });
 

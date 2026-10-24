@@ -11,9 +11,80 @@ function hojeNoBrasil() {
   });
 }
 
+// Cobrança de um mês: referência no dia 1º e vencimento no dia 10
+function cobrancaDoMes(ano: number, mes: number) {
+  const aaaaMm = `${ano}-${String(mes).padStart(2, "0")}`;
+  return { referencia: `${aaaaMm}-01`, vencimento: `${aaaaMm}-${DIA_VENCIMENTO}` };
+}
+
+// Cobrança do mês corrente no Brasil
+function cobrancaDoMesAtual() {
+  const [ano, mes] = hojeNoBrasil().split("-").map(Number);
+  return cobrancaDoMes(ano, mes);
+}
+
+// Grava a cobrança; se a do mês já existe, não faz nada (nem sobrescreve)
+async function gravarCobranca(
+  usuarioId: string,
+  plano: { id: string; preco_mensal: number },
+  cobranca: { referencia: string; vencimento: string }
+) {
+  const { error } = await supabase.from("mensalidades").upsert(
+    { usuario_id: usuarioId, plano_id: plano.id, valor: plano.preco_mensal, ...cobranca },
+    { onConflict: "usuario_id,referencia", ignoreDuplicates: true }
+  );
+
+  if (error) {
+    console.error(error);
+    throw new ErroDeNegocio("Não foi possível gerar a mensalidade", 500);
+  }
+}
+
+// Primeira cobrança de quem acabou de assinar. Até o dia do vencimento, é a do
+// mês atual; depois dele, a do mês seguinte, para ninguém já nascer em atraso.
+export async function gerarPrimeiraMensalidade(
+  usuarioId: string,
+  plano: { id: string; preco_mensal: number }
+) {
+  const [ano, mes, dia] = hojeNoBrasil().split("-").map(Number);
+  const cobranca =
+    dia <= Number(DIA_VENCIMENTO)
+      ? cobrancaDoMes(ano, mes)
+      : mes === 12
+        ? cobrancaDoMes(ano + 1, 1)
+        : cobrancaDoMes(ano, mes + 1);
+
+  await gravarCobranca(usuarioId, plano, cobranca);
+}
+
+// Garante a cobrança do mês atual de quem tem plano. Usada ao listar as
+// mensalidades e ao cancelar o plano (quem foi sócio no mês, deve o mês).
+export async function garantirCobrancaDoMes(
+  usuarioId: string,
+  plano: { id: string; preco_mensal: number }
+) {
+  const doMes = cobrancaDoMesAtual();
+
+  // Cobrança de um mês seguinte já existe quando o sócio assinou depois do
+  // vencimento (ver gerarPrimeiraMensalidade): o mês da assinatura não é cobrado
+  const { count, error } = await supabase
+    .from("mensalidades")
+    .select("id", { count: "exact", head: true })
+    .eq("usuario_id", usuarioId)
+    .gt("referencia", doMes.referencia);
+
+  if (error) {
+    console.error(error);
+    throw new ErroDeNegocio("Não foi possível carregar as mensalidades", 500);
+  }
+  if (!count) {
+    await gravarCobranca(usuarioId, plano, doMes);
+  }
+}
+
 // Sem os tipos gerados do banco, o supabase-js trata "plano:planos(...)" como
 // lista. Perfil e mensalidade apontam para um plano só: chega objeto (ou null).
-type PlanoDoPerfil = { plano: { id: string; preco_mensal: number } | null };
+export type PlanoDoPerfil = { plano: { id: string; preco_mensal: number } | null };
 
 type LinhaMensalidade = {
   id: string;
@@ -46,24 +117,7 @@ export async function listarMensalidades(usuarioId: string) {
 
   // 2. Se tem plano, garante a cobrança do mês atual
   if (perfil.plano) {
-    const [ano, mes] = hojeNoBrasil().split("-");
-
-    const { error: erroCobranca } = await supabase.from("mensalidades").upsert(
-      {
-        usuario_id: usuarioId,
-        plano_id: perfil.plano.id,
-        referencia: `${ano}-${mes}-01`,
-        valor: perfil.plano.preco_mensal,
-        vencimento: `${ano}-${mes}-${DIA_VENCIMENTO}`,
-      },
-      // Se a cobrança do mês já existe, não faz nada (nem sobrescreve)
-      { onConflict: "usuario_id,referencia", ignoreDuplicates: true }
-    );
-
-    if (erroCobranca) {
-      console.error(erroCobranca);
-      throw new ErroDeNegocio("Não foi possível gerar a mensalidade", 500);
-    }
+    await garantirCobrancaDoMes(usuarioId, perfil.plano);
   }
 
   // 3. Lista todas, da mais recente para a mais antiga
@@ -125,14 +179,35 @@ export async function pagarMensalidade(usuarioId: string, id: string) {
   }
 }
 
-// Usada ao contratar, trocar ou cancelar o plano: as cobranças ainda pendentes
-// pertencem ao plano antigo. As já pagas continuam como histórico.
-export async function removerMensalidadesPendentes(usuarioId: string) {
+// Troca de plano: as cobranças ainda não pagas do mês atual em diante passam
+// para o plano novo, com o preço novo. As de meses anteriores continuam
+// devidas com o valor de antes: trocar de plano não apaga dívida.
+export async function reajustarPendentes(
+  usuarioId: string,
+  plano: { id: string; preco_mensal: number }
+) {
+  const { error } = await supabase
+    .from("mensalidades")
+    .update({ plano_id: plano.id, valor: plano.preco_mensal })
+    .eq("usuario_id", usuarioId)
+    .eq("status", "pendente")
+    .gte("referencia", cobrancaDoMesAtual().referencia);
+
+  if (error) {
+    console.error(error);
+    throw new ErroDeNegocio("Não foi possível atualizar as mensalidades", 500);
+  }
+}
+
+// Cancelamento: apaga só as cobranças de meses que ainda não começaram. O mês
+// atual e os anteriores continuam devidos, e as pagas ficam como histórico.
+export async function removerCobrancasFuturas(usuarioId: string) {
   const { error } = await supabase
     .from("mensalidades")
     .delete()
     .eq("usuario_id", usuarioId)
-    .eq("status", "pendente");
+    .eq("status", "pendente")
+    .gt("referencia", cobrancaDoMesAtual().referencia);
 
   if (error) {
     console.error(error);

@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   listarMensalidades,
   pagarMensalidade,
-  removerMensalidadesPendentes,
+  reajustarPendentes,
+  removerCobrancasFuturas,
 } from "../../../src/services/mensalidade.service";
 import { banco, filtrosEq } from "../../apoio/supabaseFalso";
 
@@ -21,11 +22,12 @@ describe("listarMensalidades", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-15T15:00:00Z"));
     banco.responder("perfis", { data: { plano: { id: "p1", preco_mensal: 59.9 } } });
-    banco.responder("mensalidades", {}, { data: [linha] });
+    // Nenhuma cobrança de mês seguinte → gera a do mês atual
+    banco.responder("mensalidades", { count: 0 }, {}, { data: [linha] });
 
     await listarMensalidades("u1");
 
-    const [cobranca] = banco.consultasA("mensalidades");
+    const [, cobranca] = banco.consultasA("mensalidades");
     const upsert = cobranca.operacoes.find((o) => o.metodo === "upsert")!;
     expect(upsert.argumentos).toEqual([
       { usuario_id: "u1", plano_id: "p1", referencia: "2026-10-01", valor: 59.9, vencimento: "2026-10-10" },
@@ -39,12 +41,48 @@ describe("listarMensalidades", () => {
     // 1º de novembro às 01h em UTC ainda é 31 de outubro em São Paulo
     vi.setSystemTime(new Date("2026-11-01T01:00:00Z"));
     banco.responder("perfis", { data: { plano: { id: "p1", preco_mensal: 59.9 } } });
-    banco.responder("mensalidades", {}, { data: [] });
+    banco.responder("mensalidades", { count: 0 }, {}, { data: [] });
 
     await listarMensalidades("u1");
 
-    const upsert = banco.consultasA("mensalidades")[0].operacoes.find((o) => o.metodo === "upsert")!;
+    const upsert = banco.consultasA("mensalidades")[1].operacoes.find((o) => o.metodo === "upsert")!;
     expect(upsert.argumentos[0]).toMatchObject({ referencia: "2026-10-01", vencimento: "2026-10-10" });
+  });
+
+  it("quem assinou depois do dia 10 não ganha a cobrança do mês da assinatura", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-24T15:00:00Z"));
+    banco.responder("perfis", { data: { plano: { id: "p1", preco_mensal: 59.9 } } });
+    const novembro = { ...linha, referencia: "2026-11-01", vencimento: "2026-11-10" };
+    // Já existe a cobrança de novembro, criada na assinatura → outubro não é gerado
+    banco.responder("mensalidades", { count: 1 }, { data: [novembro] });
+
+    const lista = await listarMensalidades("u1");
+
+    const [verificacao] = banco.consultasA("mensalidades");
+    expect(filtrosEq(verificacao)).toEqual({ usuario_id: "u1" });
+    expect(verificacao.operacoes).toContainEqual({ metodo: "gt", argumentos: ["referencia", "2026-10-01"] });
+    expect(banco.consultasA("mensalidades").some((c) => c.operacoes.some((o) => o.metodo === "upsert"))).toBe(false);
+    expect(lista.map((m) => m.referencia)).toEqual(["2026-11-01"]);
+  });
+
+  it("no mês seguinte, a cobrança volta a ser gerada normalmente", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-12-02T15:00:00Z"));
+    banco.responder("perfis", { data: { plano: { id: "p1", preco_mensal: 59.9 } } });
+    banco.responder("mensalidades", { count: 0 }, {}, { data: [] });
+
+    await listarMensalidades("u1");
+
+    const upsert = banco.consultasA("mensalidades")[1].operacoes.find((o) => o.metodo === "upsert")!;
+    expect(upsert.argumentos[0]).toMatchObject({ referencia: "2026-12-01", vencimento: "2026-12-10" });
+  });
+
+  it("falha do banco ao verificar as cobranças futuras é erro do servidor", async () => {
+    banco.responder("perfis", { data: { plano: { id: "p1", preco_mensal: 59.9 } } });
+    banco.responder("mensalidades", { error: { message: "timeout" } });
+
+    await expect(listarMensalidades("u1")).rejects.toMatchObject({ status: 500 });
   });
 
   it("sem plano, não gera cobrança e só lista o histórico", async () => {
@@ -125,13 +163,43 @@ describe("pagarMensalidade", () => {
   });
 });
 
-describe("removerMensalidadesPendentes", () => {
-  it("apaga só as pendentes do sócio (as pagas ficam como histórico)", async () => {
+describe("reajustarPendentes (troca de plano)", () => {
+  it("passa para o plano novo só as pendentes do mês atual em diante", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-24T15:00:00Z"));
     banco.responder("mensalidades", {});
-    await removerMensalidadesPendentes("u1");
 
-    const consulta = banco.consultasA("mensalidades")[0];
+    await reajustarPendentes("u1", { id: "p2", preco_mensal: 99.9 });
+
+    const [consulta] = banco.consultasA("mensalidades");
+    expect(consulta.operacoes.find((o) => o.metodo === "update")!.argumentos[0]).toEqual({
+      plano_id: "p2",
+      valor: 99.9,
+    });
+    expect(filtrosEq(consulta)).toEqual({ usuario_id: "u1", status: "pendente" });
+    // Dívida de meses anteriores continua com o valor de antes
+    expect(consulta.operacoes).toContainEqual({ metodo: "gte", argumentos: ["referencia", "2026-10-01"] });
+    expect(consulta.operacoes.some((o) => o.metodo === "delete")).toBe(false);
+  });
+
+  it("falha do banco é erro do servidor", async () => {
+    banco.responder("mensalidades", { error: { message: "timeout" } });
+    await expect(reajustarPendentes("u1", { id: "p2", preco_mensal: 99.9 })).rejects.toMatchObject({ status: 500 });
+  });
+});
+
+describe("removerCobrancasFuturas (cancelamento)", () => {
+  it("apaga só as pendentes de meses que ainda não começaram", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-24T15:00:00Z"));
+    banco.responder("mensalidades", {});
+
+    await removerCobrancasFuturas("u1");
+
+    const [consulta] = banco.consultasA("mensalidades");
     expect(consulta.operacoes.some((o) => o.metodo === "delete")).toBe(true);
     expect(filtrosEq(consulta)).toEqual({ usuario_id: "u1", status: "pendente" });
+    // O mês atual e os anteriores continuam devidos
+    expect(consulta.operacoes).toContainEqual({ metodo: "gt", argumentos: ["referencia", "2026-10-01"] });
   });
 });
