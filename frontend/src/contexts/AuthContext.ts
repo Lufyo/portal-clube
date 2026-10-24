@@ -8,7 +8,11 @@ export type AuthContextData = {
   usuario: Usuario | null;
   carregando: boolean; // true enquanto conferimos se já existe um login salvo
   entrar: (email: string, senha: string) => Promise<void>;
-  sair: () => void;
+  // "aviso" aparece na tela de login (ex.: por que a sessão foi encerrada)
+  sair: (aviso?: string) => void;
+  aviso: string | null;
+  // Depois de editar os dados, o nome e o e-mail novos valem para todas as telas
+  atualizarUsuario: (dados: Pick<Usuario, "nome" | "email">) => void;
 };
 
 export const AuthContext = createContext<AuthContextData | null>(null);

@@ -1,6 +1,11 @@
 import { criarCliente, supabase } from "../config/supabase";
 import { ErroDeNegocio } from "../errors/ErroDeNegocio";
-import type { LoginInput, RegisterInput } from "../schemas/auth.schema";
+import type {
+  LoginInput,
+  PerfilInput,
+  RegisterInput,
+  TrocaDeSenhaInput,
+} from "../schemas/auth.schema";
 
 export async function registrarSocio(dados: RegisterInput) {
   // 1. Cria o usuário no Supabase Auth (a senha é guardada com hash por ele).
@@ -102,4 +107,72 @@ export async function buscarPerfil(id: string) {
     throw new ErroDeNegocio("Perfil não encontrado", 404);
   }
   return data as unknown as PerfilComPlano;
+}
+// Confere a senha do usuário tentando um login com ela. Usa um cliente
+// temporário, como o autenticarSocio, para não misturar sessões.
+async function senhaConfere(email: string, senha: string) {
+  const { data, error } = await criarCliente().auth.signInWithPassword({ email, password: senha });
+  return !error && Boolean(data.session);
+}
+
+// Editar dados: nome e data de nascimento no perfil e, se mudou, o e-mail no
+// Auth. Trocar o e-mail exige a senha atual: quem pegar uma sessão aberta não
+// consegue tomar a conta trocando o e-mail.
+export async function atualizarPerfil(usuarioId: string, emailAtual: string, dados: PerfilInput) {
+  if (dados.email !== emailAtual) {
+    if (!dados.senhaAtual) {
+      throw new ErroDeNegocio("Informe sua senha para trocar o e-mail", 400, "senhaAtual");
+    }
+    if (!(await senhaConfere(emailAtual, dados.senhaAtual))) {
+      throw new ErroDeNegocio("Senha incorreta", 400, "senhaAtual");
+    }
+
+    // email_confirm: true, como no cadastro, para não depender de e-mail de confirmação
+    const { error } = await supabase.auth.admin.updateUserById(usuarioId, {
+      email: dados.email,
+      email_confirm: true,
+    });
+    if (error) {
+      if (error.code === "email_exists" || /already/i.test(error.message ?? "")) {
+        throw new ErroDeNegocio("E-mail já cadastrado", 409, "email");
+      }
+      console.error(error);
+      throw new ErroDeNegocio("Não foi possível trocar o e-mail", 500);
+    }
+  }
+
+  const { error } = await supabase
+    .from("perfis")
+    .update({ nome: dados.nome, data_nascimento: dados.dataNascimento })
+    .eq("id", usuarioId);
+
+  if (error) {
+    console.error(error);
+    throw new ErroDeNegocio("Não foi possível salvar seus dados", 500);
+  }
+}
+
+export async function trocarSenha(usuarioId: string, email: string, dados: TrocaDeSenhaInput) {
+  // 400 (e não 401): a sessão continua válida, só a senha digitada está errada
+  if (!(await senhaConfere(email, dados.senhaAtual))) {
+    throw new ErroDeNegocio("Senha atual incorreta", 400, "senhaAtual");
+  }
+
+  const { error } = await supabase.auth.admin.updateUserById(usuarioId, { password: dados.novaSenha });
+  if (error) {
+    console.error(error);
+    throw new ErroDeNegocio("Não foi possível trocar a senha", 500);
+  }
+
+  // Trocar a senha encerra todas as sessões da conta, inclusive a atual (o
+  // token de quem trocou passa a dar 401). Entra de novo com a senha nova para
+  // a pessoa continuar logada neste aparelho; nos outros, a sessão acaba.
+  // Se esse login falhar, a senha já foi trocada: o site pede para entrar de novo.
+  try {
+    const { data } = await criarCliente().auth.signInWithPassword({ email, password: dados.novaSenha });
+    return { token: data.session?.access_token ?? null };
+  } catch (erroLogin) {
+    console.error(erroLogin);
+    return { token: null };
+  }
 }

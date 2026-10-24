@@ -171,6 +171,8 @@ Todas começam com `/api`.
 | --- | --- | --- |
 | `POST /auth/register` · `POST /auth/login` | Público | Cadastro e login |
 | `GET /auth/me` | Logado | Dados do usuário autenticado |
+| `PATCH /auth/me` | Logado | Editar nome, e-mail e data de nascimento (o CPF não muda; trocar o e-mail pede a senha atual) |
+| `PUT /auth/senha` | Logado | Trocar a senha, conferindo a senha atual |
 | `GET /planos` | Público | Planos de sócio |
 | `POST /assinatura` · `DELETE /assinatura` | Logado | Contratar ou cancelar plano |
 | `GET /mensalidades` · `POST /mensalidades/:id/pagar` | Logado | Listar e pagar mensalidades |

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { documentoOpenApi } from "../../src/docs/openapi";
-import { loginSchema, registerSchema } from "../../src/schemas/auth.schema";
+import { loginSchema, perfilSchema, registerSchema, trocaDeSenhaSchema } from "../../src/schemas/auth.schema";
 import { compraSchema } from "../../src/schemas/ingresso.schema";
 import { noticiaSchema } from "../../src/schemas/noticia.schema";
 import { api } from "../apoio/api";
@@ -71,15 +71,17 @@ describe("documentação da API", () => {
     expect(tela.text).toContain("swagger-ui");
   });
 
-  it("documenta as 22 operações da API", () => {
+  it("documenta as 24 operações da API", () => {
     const operacoes = Object.values(documentoOpenApi.paths).flatMap((caminho) => Object.keys(caminho));
-    expect(operacoes).toHaveLength(22);
+    expect(operacoes).toHaveLength(24);
   });
 
   // Exemplo do Swagger que a própria API recusaria engana quem usa a documentação
   it.each([
     ["/auth/register", "post", registerSchema],
     ["/auth/login", "post", loginSchema],
+    ["/auth/me", "patch", perfilSchema],
+    ["/auth/senha", "put", trocaDeSenhaSchema],
     ["/ingressos", "post", compraSchema],
     ["/admin/noticias", "post", noticiaSchema],
   ] as const)("o exemplo de %s passa na validação da API", (caminho, metodo, schema) => {

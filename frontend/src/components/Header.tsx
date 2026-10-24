@@ -93,7 +93,7 @@ export default function Header() {
                 <li>
                   <button
                     type="button"
-                    onClick={sair}
+                    onClick={() => sair()}
                     className="botao-secundario [--botao-px:1rem] [--botao-py:0.5rem]"
                   >
                     Sair
