@@ -42,15 +42,17 @@ describe("GET /api/admin/resumo (editor, gestor e admin)", () => {
 
 describe("gestão de notícias (editor e admin)", () => {
   it.each(["socio", "gestor"] as const)("bloqueia %s em todas as rotas", async (papel) => {
+    // Cada requisição abre um servidor de teste: cria uma de cada vez, só na
+    // hora de enviar, em vez de deixar cinco servidores abertos ao mesmo tempo
     const rotas = [
-      api().get("/api/admin/noticias"),
-      api().post("/api/admin/noticias").send({}),
-      api().put("/api/admin/noticias/n1").send({}),
-      api().patch("/api/admin/noticias/n1/publicacao").send({ publicada: true }),
-      api().delete("/api/admin/noticias/n1"),
+      () => api().get("/api/admin/noticias"),
+      () => api().post("/api/admin/noticias").send({}),
+      () => api().put("/api/admin/noticias/n1").send({}),
+      () => api().patch("/api/admin/noticias/n1/publicacao").send({ publicada: true }),
+      () => api().delete("/api/admin/noticias/n1"),
     ];
     for (const requisicao of rotas) {
-      const resposta = await requisicao.set(entrarComo("u1", papel));
+      const resposta = await requisicao().set(entrarComo("u1", papel));
       expect(resposta.status).toBe(403);
     }
   });

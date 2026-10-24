@@ -1,4 +1,10 @@
-import { gerarPrimeiraMensalidade, removerMensalidadesPendentes } from "./mensalidade.service";
+import {
+  garantirCobrancaDoMes,
+  gerarPrimeiraMensalidade,
+  reajustarPendentes,
+  removerCobrancasFuturas,
+  type PlanoDoPerfil,
+} from "./mensalidade.service";
 import { supabase } from "../config/supabase";
 import { ErroDeNegocio } from "../errors/ErroDeNegocio";
 
@@ -67,18 +73,38 @@ export async function contratarPlano(usuarioId: string, planoId: string) {
     throw new ErroDeNegocio("Não foi possível contratar o plano", 500);
   }
 
-  // Na troca, a cobrança do mês é recriada com o plano novo quando o sócio
-  // abrir as mensalidades. Na assinatura nova, a primeira cobrança é gerada
-  // já agora, no mês certo (o seguinte, se o dia do vencimento já passou).
-  await removerMensalidadesPendentes(usuarioId);
+  // Assinatura nova: a primeira cobrança é gerada já agora, no mês certo (o
+  // seguinte, se o dia do vencimento já passou). Dívida de antes do
+  // cancelamento continua de pé. Troca: as pendentes do mês atual em diante
+  // passam para o plano novo; nada é apagado.
   if (assinaturaNova) {
     await gerarPrimeiraMensalidade(usuarioId, plano);
+  } else {
+    await reajustarPendentes(usuarioId, plano);
   }
 
   return { id: plano.id, nome: plano.nome };
 }
 
 export async function cancelarPlano(usuarioId: string) {
+  const { data, error: erroPerfil } = await supabase
+    .from("perfis")
+    .select("plano:planos(id, preco_mensal)")
+    .eq("id", usuarioId)
+    .maybeSingle();
+
+  if (erroPerfil) {
+    console.error(erroPerfil);
+    throw new ErroDeNegocio("Não foi possível cancelar o plano", 500);
+  }
+
+  // Quem foi sócio no mês deve o mês, mesmo que nunca tenha aberto as
+  // mensalidades (e a cobrança ainda não exista)
+  const perfil = data as unknown as PlanoDoPerfil | null;
+  if (perfil?.plano) {
+    await garantirCobrancaDoMes(usuarioId, perfil.plano);
+  }
+
   const { error } = await supabase
     .from("perfis")
     .update({ plano_id: null })
@@ -89,5 +115,6 @@ export async function cancelarPlano(usuarioId: string) {
     throw new ErroDeNegocio("Não foi possível cancelar o plano", 500);
   }
 
-  await removerMensalidadesPendentes(usuarioId);
+  // Só as cobranças de meses que ainda não começaram deixam de existir
+  await removerCobrancasFuturas(usuarioId);
 }

@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   listarMensalidades,
   pagarMensalidade,
-  removerMensalidadesPendentes,
+  reajustarPendentes,
+  removerCobrancasFuturas,
 } from "../../../src/services/mensalidade.service";
 import { banco, filtrosEq } from "../../apoio/supabaseFalso";
 
@@ -162,13 +163,43 @@ describe("pagarMensalidade", () => {
   });
 });
 
-describe("removerMensalidadesPendentes", () => {
-  it("apaga só as pendentes do sócio (as pagas ficam como histórico)", async () => {
+describe("reajustarPendentes (troca de plano)", () => {
+  it("passa para o plano novo só as pendentes do mês atual em diante", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-24T15:00:00Z"));
     banco.responder("mensalidades", {});
-    await removerMensalidadesPendentes("u1");
 
-    const consulta = banco.consultasA("mensalidades")[0];
+    await reajustarPendentes("u1", { id: "p2", preco_mensal: 99.9 });
+
+    const [consulta] = banco.consultasA("mensalidades");
+    expect(consulta.operacoes.find((o) => o.metodo === "update")!.argumentos[0]).toEqual({
+      plano_id: "p2",
+      valor: 99.9,
+    });
+    expect(filtrosEq(consulta)).toEqual({ usuario_id: "u1", status: "pendente" });
+    // Dívida de meses anteriores continua com o valor de antes
+    expect(consulta.operacoes).toContainEqual({ metodo: "gte", argumentos: ["referencia", "2026-10-01"] });
+    expect(consulta.operacoes.some((o) => o.metodo === "delete")).toBe(false);
+  });
+
+  it("falha do banco é erro do servidor", async () => {
+    banco.responder("mensalidades", { error: { message: "timeout" } });
+    await expect(reajustarPendentes("u1", { id: "p2", preco_mensal: 99.9 })).rejects.toMatchObject({ status: 500 });
+  });
+});
+
+describe("removerCobrancasFuturas (cancelamento)", () => {
+  it("apaga só as pendentes de meses que ainda não começaram", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-24T15:00:00Z"));
+    banco.responder("mensalidades", {});
+
+    await removerCobrancasFuturas("u1");
+
+    const [consulta] = banco.consultasA("mensalidades");
     expect(consulta.operacoes.some((o) => o.metodo === "delete")).toBe(true);
     expect(filtrosEq(consulta)).toEqual({ usuario_id: "u1", status: "pendente" });
+    // O mês atual e os anteriores continuam devidos
+    expect(consulta.operacoes).toContainEqual({ metodo: "gt", argumentos: ["referencia", "2026-10-01"] });
   });
 });
