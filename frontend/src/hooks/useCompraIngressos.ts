@@ -15,15 +15,14 @@ export function useCompraIngressos(jogoId: string | null) {
   const [comprando, setComprando] = useState(false);
   const [compra, setCompra] = useState<RespostaCompra | null>(null);
 
-  const carregar = useCallback(async () => {
-    if (!jogoId) return;
-    try {
-      setDados(await api<DadosCompra>(`/ingressos/jogos/${jogoId}`));
-    } catch (e) {
-      setErro(mensagemDeErro(e));
-    } finally {
-      setCarregando(false);
-    }
+  // Em .then (e não com await) para o estado só mudar quando a resposta
+  // chegar: assim o useEffect abaixo não altera estado de forma síncrona.
+  const carregar = useCallback(() => {
+    if (!jogoId) return Promise.resolve();
+    return api<DadosCompra>(`/ingressos/jogos/${jogoId}`)
+      .then(setDados)
+      .catch((e) => setErro(mensagemDeErro(e)))
+      .finally(() => setCarregando(false));
   }, [jogoId]);
 
   useEffect(() => {

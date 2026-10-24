@@ -11,15 +11,16 @@ export function useNoticiasAdmin() {
   const [erro, setErro] = useState<string | null>(null);
   const [ocupadoId, setOcupadoId] = useState<string | null>(null);
 
-  const carregar = useCallback(async () => {
-    try {
-      setNoticias(await api<NoticiaAdmin[]>("/admin/noticias"));
-    } catch (e) {
-      setErro(mensagemDeErro(e));
-    } finally {
-      setCarregando(false);
-    }
-  }, []);
+  // Em .then (e não com await) para o estado só mudar quando a resposta
+  // chegar: assim o useEffect abaixo não altera estado de forma síncrona.
+  const carregar = useCallback(
+    () =>
+      api<NoticiaAdmin[]>("/admin/noticias")
+        .then(setNoticias)
+        .catch((e) => setErro(mensagemDeErro(e)))
+        .finally(() => setCarregando(false)),
+    []
+  );
 
   useEffect(() => {
     carregar();

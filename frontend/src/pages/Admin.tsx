@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import Footer from "../components/Footer";
 import Header from "../components/Header";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../hooks/useAuth";
 import { useResumoAdmin } from "../hooks/useResumoAdmin";
 import type { Resumo } from "../types/admin";
 import type { Papel } from "../types/auth";

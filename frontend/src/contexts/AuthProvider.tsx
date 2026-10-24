@@ -1,21 +1,7 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api, guardarToken, lerToken, removerToken } from "../services/api";
 import type { RespostaLogin, Usuario } from "../types/auth";
-
-type AuthContextData = {
-  usuario: Usuario | null;
-  carregando: boolean; // true enquanto conferimos se já existe um login salvo
-  entrar: (email: string, senha: string) => Promise<void>;
-  sair: () => void;
-};
-
-const AuthContext = createContext<AuthContextData | null>(null);
+import { AuthContext } from "./AuthContext";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
@@ -51,13 +37,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-// Hook para usar o contexto: const { usuario, entrar, sair } = useAuth();
-export function useAuth() {
-  const contexto = useContext(AuthContext);
-  if (!contexto) {
-    throw new Error("useAuth deve ser usado dentro do AuthProvider");
-  }
-  return contexto;
 }

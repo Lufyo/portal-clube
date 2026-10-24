@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation } from "react-router-dom";
 import CampoFormulario from "../components/CampoFormulario";
 import Footer from "../components/Footer";
 import Header from "../components/Header";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../hooks/useAuth";
 import { useLogin } from "../hooks/useLogin";
 
 export default function Login() {

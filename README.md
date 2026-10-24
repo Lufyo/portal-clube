@@ -107,7 +107,7 @@ portal-clube/
         ├── pages/         uma página por rota
         ├── components/    partes reutilizáveis (cartões, seções, RotaProtegida...)
         ├── hooks/         lógica de cada tela (useLogin, useCompraIngressos...)
-        ├── contexts/      AuthContext: usuário logado
+        ├── contexts/      AuthContext e AuthProvider: usuário logado (use com o hook useAuth)
         ├── services/      api.ts: função única para chamar a API
         ├── types/         formato dos dados que a API devolve
         ├── utils/         formatadores (moeda, datas, CPF) e permissões
@@ -180,7 +180,6 @@ A compra de ingressos é feita pela função `comprar_ingressos(p_usuario, p_jog
 ## Problemas conhecidos
 
 - **Build de produção quebrado:** `backend/tsconfig.json` inclui arquivos de `frontend/src` e `frontend/tsconfig.app.json` inclui `backend/src/utils`, então `npm run build` falha nas duas pastas. Em desenvolvimento (`npm run dev`) tudo funciona.
-- **ESLint** aponta 4 erros no frontend (`setState` dentro de `useEffect` em `useCompraIngressos`, `useMensalidades` e `useNoticiasAdmin`, e exportação mista em `AuthContext`).
 - **CORS** aceita só `http://localhost:5173` (`backend/src/app.ts`); para publicar, o endereço do site precisa vir de configuração.
 - Não há testes automatizados.
 
